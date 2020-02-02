@@ -1,1 +1,1 @@
-from qactuar.main import make_server
+from qactuar.server import make_server
