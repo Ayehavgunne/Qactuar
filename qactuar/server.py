@@ -4,6 +4,7 @@ import multiprocessing
 import select
 import socket
 import sys
+import urllib.parse
 from datetime import datetime
 from email.utils import formatdate
 from time import mktime, time
@@ -14,6 +15,7 @@ from qactuar.request import HTTPRequest
 CHECK_PROCESS_INTERVAL = 1
 SELECT_SLEEP_TIME = 0
 MAX_CHILD_PROCESSES = 100
+RECV_TIMEOUT = 0.1
 
 
 class QactuarServer(object):
@@ -34,6 +36,7 @@ class QactuarServer(object):
         self.server_port = port
         self.application = None
         self.client_connection: Optional[socket.socket] = None
+        self.scheme = "http"
         self.raw_request_data = None
         self.request_data: Optional[HTTPRequest] = None
         self.response = {
@@ -69,6 +72,7 @@ class QactuarServer(object):
         else:
             if connection:
                 self.client_connection = connection
+                self.client_connection.settimeout(RECV_TIMEOUT)
                 self.fork()
 
     def fork(self):
@@ -95,12 +99,27 @@ class QactuarServer(object):
         sys.exit(0)
 
     def handle_one_request(self):
-        self.raw_request_data = request_data = self.client_connection.recv(1024)
-        self.request_data = HTTPRequest(request_data)
+        self.raw_request_data = self.get_request_data()
+        if not self.raw_request_data:
+            self.close_socket()
+            return
+        self.client_connection.settimeout(None)
+        self.request_data = HTTPRequest(self.raw_request_data)
         env = self.create_scope()
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.application(env, self.recieve, self.send))
         self.finish_response()
+
+    def get_request_data(self) -> bytes:
+        request_data = b""
+        new_data = b""
+        while True:
+            request_data += new_data
+            try:
+                new_data = self.client_connection.recv(1024)
+            except socket.timeout:
+                break
+        return request_data
 
     async def send(self, data: Dict, _=None):
         if data["type"] == "http.response.start":
@@ -117,6 +136,7 @@ class QactuarServer(object):
             body = body[1]
         else:
             body = b""
+        # TODO: support streaming from client
         return {
             "type": "http.request",
             "body": body,
@@ -124,21 +144,40 @@ class QactuarServer(object):
         }
 
     def create_scope(self):
+        # TODO: Pseudo headers (present in HTTP/2 and HTTP/3) must be removed; if
+        #  :authority is present its value must be added to the start of the iterable
+        #  with host as the header name or replace any existing host header already
+        #  present.
         return {
+            "type": "http",
             "asgi": {"version": "2.0", "spec_version": "2.0"},
             "http_version": self.request_data.request_version.replace("HTTP/", ""),
             "method": self.request_data.command,
-            "path": self.request_data.path,
-            "raw_path": self.request_data.path.encode("utf-8"),
+            "scheme": self.scheme,
+            "path": urllib.parse.unquote(self.get_path()),
+            "raw_path": self.get_path().encode("utf-8"),
+            "query_string": self.get_query_string(),
             "root_path": "",
-            "server": (self.server_name, self.server_port),
-            "type": "http",
             "headers": (
                 (key.lower().encode("utf-8"), value.encode("utf-8"))
                 for key, value in self.request_data.headers.items()
             ),
             "client": self.client_connection.getpeername(),
+            "server": (self.server_name, self.server_port),
         }
+
+    def get_path(self) -> str:
+        return self.request_data.path.split("?")[0]
+
+    def get_query_string(self) -> bytes:
+        query_string = self.request_data.path.split("?")
+        if len(query_string) > 1:
+            query_string = query_string[1]
+            # query_string = urllib.parse.quote(query_string)
+            query_string = query_string.encode("utf-8")
+        else:
+            query_string = b""
+        return query_string
 
     def compile_headers(self):
         server_headers = [
@@ -157,11 +196,14 @@ class QactuarServer(object):
             response += f"\r\n{body}"
             self.client_connection.sendall(response.encode("utf-8"))
         finally:
-            try:
-                self.client_connection.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
-            self.client_connection.close()
+            self.close_socket()
+
+    def close_socket(self):
+        try:
+            self.client_connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        self.client_connection.close()
 
 
 def make_server(host, port, application):
