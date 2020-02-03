@@ -1,5 +1,6 @@
 import asyncio
 import errno
+import logging
 import multiprocessing
 import select
 import socket
@@ -30,12 +31,18 @@ class QactuarServer(object):
         self.listen_socket = listen_socket = socket.socket(
             self.address_family, self.socket_type
         )
+
         listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listen_socket.bind(server_address)
         listen_socket.listen(self.request_queue_size)
+
         self.server_name: str = socket.getfqdn(self.host)
         self.server_port: int = self.port
-        self.logger: Logger = multiprocessing.get_logger()
+
+        self.logger: Logger = logging.getLogger()
+        self.logger.setLevel(logging.INFO)
+        self.logger.addHandler(logging.StreamHandler())
+
         self.application: Optional[Callable] = None
         self.client_connection: Optional[socket.socket] = None
         self.scheme: str = "http"
@@ -52,13 +59,18 @@ class QactuarServer(object):
         self.start_up()
 
     def serve_forever(self) -> None:
-        while True:
-            ready_to_read, _, _ = select.select(
-                [self.listen_socket], [], [], SELECT_SLEEP_TIME
-            )
-            if ready_to_read:
-                self.check_socket()
-            self.check_processes()
+        try:
+            while True:
+                ready_to_read, _, _ = select.select(
+                    [self.listen_socket], [], [], SELECT_SLEEP_TIME
+                )
+                if ready_to_read:
+                    self.check_socket()
+                self.check_processes()
+        except KeyboardInterrupt:
+            self.shut_down()
+        except Exception as err:
+            self.logger.exception(err)
 
     def check_socket(self) -> None:
         try:
@@ -67,8 +79,6 @@ class QactuarServer(object):
             code, msg = e.args
             if code != errno.EINTR:
                 raise
-        except KeyboardInterrupt:
-            self.shut_down()
         else:
             if connection:
                 self.client_connection = connection
@@ -86,8 +96,9 @@ class QactuarServer(object):
             self.processes[process.ident] = process
 
     def check_processes(self) -> None:
-        if time() - self.time_last_cleaned_processes > CHECK_PROCESS_INTERVAL:
-            self.time_last_cleaned_processes = time()
+        current_time = time()
+        if current_time - self.time_last_cleaned_processes > CHECK_PROCESS_INTERVAL:
+            self.time_last_cleaned_processes = current_time
             for ident, process in list(self.processes.items()):
                 if not process.is_alive():
                     process.close()
@@ -99,7 +110,9 @@ class QactuarServer(object):
                 self.create_lifespan_scope(), self.lifespan_receive, self.send
             )
         )
-        self.logger.info(f"Qactuar: Serving HTTP on {self.host}:{self.port} ...")
+        self.logger.info(
+            f"Qactuar: Serving {self.scheme.upper()} on {self.host}:{self.port}"
+        )
 
     def shut_down(self) -> None:
         self.shutting_down = True
@@ -153,6 +166,10 @@ class QactuarServer(object):
             data["type"] == "lifespan.startup.failed"
             or data["type"] == "lifespan.shutdown.failed"
         ):
+            if "startup" in data["type"]:
+                self.logger.error("App startup failed")
+            if "shutdown" in data["type"]:
+                self.logger.error("App shutdown failed")
             self.logger.error(data["message"])
 
     async def receive(self) -> Dict:
