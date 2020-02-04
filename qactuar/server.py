@@ -146,15 +146,17 @@ class QactuarServer(object):
 
     def get_request_data(self) -> bytes:
         request_data = BytesList()
+        request = Request()
 
         while True:
             try:
                 request_data.write(self.client_connection.recv(RECV_BYTES))
             except socket.timeout:
-                request = Request(request_data.read())
+                request.raw_request = request_data.read()
                 if request.headers_complete:
-                    if request.headers["content-length"] and request.command != "GET":
-                        if len(request.body) == int(request.headers["content-length"]):
+                    content_length = request.headers["content-length"]
+                    if content_length is not None and request.command != "GET":
+                        if len(request.body) == int(content_length):
                             break
                         else:
                             continue

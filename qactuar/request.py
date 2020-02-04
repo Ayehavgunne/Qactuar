@@ -85,3 +85,26 @@ class Request:
     @property
     def body(self) -> bytes:
         return self._body
+
+    @property
+    def raw_request(self) -> bytes:
+        return self._raw_request
+
+    @raw_request.setter
+    def raw_request(self, request: bytes) -> None:
+        self._raw_request = request
+        try:
+            self.parse()
+        except ValueError:
+            self._reset_values()
+
+    def _reset_values(self) -> None:
+        self._command: str = ""
+        self._request_version: str = ""
+        self._path: str = ""
+        self._raw_path: bytes = b""
+        self._query_string: bytes = b""
+        self._headers = []
+        self._parsed_headers: Header = Header()
+        self._body: bytes = b""
+        self.headers_complete = False
