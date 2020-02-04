@@ -12,13 +12,15 @@ from time import mktime, time
 from typing import Callable, Dict, List, Optional, Tuple
 
 from qactuar import __version__
-from qactuar.request import HTTPRequest
+from qactuar.request import Request
 from qactuar.response import Response
+from qactuar.util import BytesList
 
 CHECK_PROCESS_INTERVAL = 1
-SELECT_SLEEP_TIME = 0
+SELECT_SLEEP_TIME = 0.025
 MAX_CHILD_PROCESSES = 100
-RECV_TIMEOUT = 0.1
+RECV_TIMEOUT = 0.01
+RECV_BYTES = 65536
 
 
 class QactuarServer(object):
@@ -47,7 +49,7 @@ class QactuarServer(object):
         self.client_connection: Optional[socket.socket] = None
         self.scheme: str = "http"
         self.raw_request_data: bytes = b""
-        self.request_data: HTTPRequest = HTTPRequest(b"")
+        self.request_data: Request = Request()
         self.response: Response = Response()
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.processes: Dict[int, multiprocessing.Process] = {}
@@ -132,7 +134,6 @@ class QactuarServer(object):
             self.close_socket()
             return
         self.client_connection.settimeout(None)
-        self.request_data = HTTPRequest(self.raw_request_data)
         if (
             self.request_data.headers["Connection"]
             and self.request_data.headers["Upgrade"]
@@ -144,15 +145,23 @@ class QactuarServer(object):
         self.finish_response()
 
     def get_request_data(self) -> bytes:
-        request_data = b""
-        new_data = b""
+        request_data = BytesList()
+
         while True:
-            request_data += new_data
             try:
-                new_data = self.client_connection.recv(1024)
+                request_data.write(self.client_connection.recv(RECV_BYTES))
             except socket.timeout:
-                break
-        return request_data
+                request = Request(request_data.read())
+                if request.headers_complete:
+                    if request.headers["content-length"] and request.command != "GET":
+                        if len(request.body) == int(request.headers["content-length"]):
+                            break
+                        else:
+                            continue
+                    break
+
+        self.request_data = request
+        return request_data.read()
 
     async def send(self, data: Dict) -> None:
         if data["type"] == "http.response.start":
@@ -161,7 +170,7 @@ class QactuarServer(object):
         if data["type"] == "http.response.body":
             # TODO: check "more_body" and if true then do self.client_connection.send()
             #  the current data
-            self.response.body += data["body"]
+            self.response.body.write(data["body"])
         if (
             data["type"] == "lifespan.startup.failed"
             or data["type"] == "lifespan.shutdown.failed"
@@ -218,22 +227,29 @@ class QactuarServer(object):
             "server": (self.server_name, self.server_port),
         }
 
-    def compile_headers(self) -> List[Tuple[str, str]]:
+    def compile_headers(self) -> List[Tuple[bytes, bytes]]:
         server_headers = [
-            ("Date", formatdate(mktime(datetime.now().timetuple()))),
-            ("Server", f"Qactuar {__version__}"),
+            (b"Date", formatdate(mktime(datetime.now().timetuple())).encode("utf-8")),
+            (b"Server", b"Qactuar " + __version__.encode("utf-8")),
         ]
         return self.response.headers + server_headers
 
     def finish_response(self) -> None:
         try:
             response_headers = self.compile_headers()
-            response = f"HTTP/1.1 {self.response.status}\r\n"
+            response = BytesList()
+            response.write(b"HTTP/1.1 ")
+            response.write(str(self.response.status).encode("utf-8"))
+            response.write(b"\r\n")
             for header in response_headers:
-                response += "{}: {}\r\n".format(*header)
-            body = self.response.body.decode("utf-8")
-            response += f"\r\n{body}"
-            self.client_connection.sendall(response.encode("utf-8"))
+                key, value = header
+                response.write(key)
+                response.write(b": ")
+                response.write(value)
+                response.write(b"\r\n")
+            response.write(b"\r\n")
+            response.write(self.response.body.read())
+            self.client_connection.sendall(response.read())
         finally:
             self.close_socket()
 

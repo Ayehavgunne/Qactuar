@@ -2,42 +2,53 @@ import urllib.parse
 from typing import List, Tuple
 
 from qactuar.header import Header
+from qactuar.util import BytesList
 
 
-class HTTPRequest:
-    def __init__(self, request: bytes):
-        self._raw_request: bytes = request
+class Request:
+    def __init__(self, request: bytes = None):
+        self._raw_request: bytes = request or b""
         self._command: str = ""
         self._request_version: str = ""
         self._path: str = ""
+        self._raw_path: bytes = b""
         self._query_string: bytes = b""
         self._headers = []
         self._parsed_headers: Header = Header()
         self._body: bytes = b""
+        self.headers_complete = False
         if request:
             self.parse()
 
     def parse(self):
-        request = self._raw_request.decode("utf-8")
-        lines = request.split("\r\n")
-        self._command, self._path, self._request_version = lines.pop(0).split(" ")
-        path_parts = self._path.split("?")
-        self._path = path_parts[0]
+        lines = self._raw_request.split(b"\r\n")
+
+        command, self._path, request_version = lines.pop(0).split(b" ")
+        self._command = command.decode("utf-8")
+        self._request_version = request_version.decode("utf-8")
+
+        path_parts = self._path.split(b"?")
+        self._path = path_parts[0].decode("utf-8")
+        self._raw_path = path_parts[0]
         if len(path_parts) > 1:
             query_string = path_parts[1]
         else:
-            query_string = ""
-        self._query_string = query_string.encode("utf-8")
+            query_string = b""
+        self._query_string = query_string
+
         line_num = 0
         for line in lines:
             if not line:
+                self.headers_complete = True
                 break
             line_num += 1
-            key, value = line.split(": ", 1)
-            self._headers.append((key.lower().encode("utf-8"), value.encode("utf-8")))
+            key, value = line.split(b": ", 1)
+            self._headers.append((key.lower(), value))
         self._parsed_headers = Header(self._headers)
-        for line in lines[line_num:]:
-            self._body += line.encode("utf-8")
+
+        body = BytesList()
+        body.writelines(lines[line_num:])
+        self._body = body.read()
 
     @property
     def headers(self) -> Header:
@@ -65,7 +76,7 @@ class HTTPRequest:
 
     @property
     def raw_path(self) -> bytes:
-        return self._path.encode("utf-8")
+        return self._raw_path
 
     @property
     def query_string(self) -> bytes:
