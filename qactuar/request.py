@@ -74,6 +74,10 @@ class Request:
     def path(self) -> str:
         return urllib.parse.unquote(self._path)
 
+    @path.setter
+    def path(self, path: str) -> None:
+        self._path = path
+
     @property
     def raw_path(self) -> bytes:
         return self._raw_path

@@ -1,8 +1,10 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Optional, Union
+
+from qactuar.models import Headers
 
 
 class Header:
-    def __init__(self, header: List[Tuple[bytes, bytes]] = None):
+    def __init__(self, header: Headers = None):
         if header is None:
             header = []
         self._header = header

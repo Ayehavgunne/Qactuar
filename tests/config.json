@@ -1,0 +1,6 @@
+{
+  "LOG_LEVEL": "INFO",
+  "APPS": {
+    "/": "tests.tonberry_app:app"
+  }
+}

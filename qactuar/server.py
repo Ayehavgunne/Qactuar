@@ -5,22 +5,18 @@ import multiprocessing
 import select
 import socket
 import sys
-from datetime import datetime
-from email.utils import formatdate
+from importlib import import_module
 from logging import Logger
-from time import mktime, time
-from typing import Callable, Dict, List, Optional, Tuple
+from time import time
+from typing import Dict, Optional
 
-from qactuar import __version__
+from qactuar.config import Config, config_init
+from qactuar.exceptions import HTTPError
+from qactuar.models import ASGIApp, Message, Receive, Scope, Send
 from qactuar.request import Request
 from qactuar.response import Response
 from qactuar.util import BytesList
 
-CHECK_PROCESS_INTERVAL = 1
-SELECT_SLEEP_TIME = 0.025
-MAX_CHILD_PROCESSES = 100
-RECV_TIMEOUT = 0.001
-RECV_BYTES = 65536
 ASGI_VERSION = {"version": "2.0", "spec_version": "2.0"}
 LIFESPAN_SCOPE = {"type": "lifespan", "asgi": ASGI_VERSION}
 
@@ -32,21 +28,32 @@ class QactuarServer(object):
     socket_opt_name = socket.SO_REUSEADDR
     request_queue_size = 65536
 
-    def __init__(self, server_address: Tuple[str, int]):
-        self.host, self.port = server_address
-        self.listen_socket = socket.socket(self.address_family, self.socket_type)
+    def __init__(
+        self,
+        host: str = None,
+        port: int = None,
+        app: ASGIApp = None,
+        config: Config = None,
+    ):
+        self.config: Config = config or config_init()
+
+        self.logger: Logger = logging.getLogger("Qactuar")
+        self.logger.setLevel(getattr(logging, self.config.LOG_LEVEL))
+        self.logger.addHandler(logging.StreamHandler())
+
+        self.host: str = host or self.config.HOST
+        self.port: int = port or self.config.PORT
+
+        self.listen_socket: socket.socket = socket.socket(
+            self.address_family, self.socket_type
+        )
         self.listen_socket.setsockopt(self.socket_level, self.socket_opt_name, 1)
-        self.listen_socket.bind(server_address)
+        self.listen_socket.bind((self.host, self.port))
         self.listen_socket.listen(self.request_queue_size)
 
         self.server_name: str = socket.getfqdn(self.host)
         self.server_port: int = self.port
 
-        self.logger: Logger = logging.getLogger()
-        self.logger.setLevel(logging.INFO)
-        self.logger.addHandler(logging.StreamHandler())
-
-        self.application: Optional[Callable] = None
         self.client_connection: Optional[socket.socket] = None
         self.scheme: str = "http"
         self.raw_request_data: bytes = b""
@@ -56,16 +63,38 @@ class QactuarServer(object):
         self.processes: Dict[int, multiprocessing.Process] = {}
         self.shutting_down: bool = False
         self.time_last_cleaned_processes: float = time()
+        self.apps: Dict[str, ASGIApp] = {"/": app} if app else {}
+        for route, app_path in self.config.APPS.items():
+            module_str, app_str = app_path.split(":")
+            app_module = import_module(module_str)
+            self.apps[route] = getattr(app_module, app_str)
+        if self.apps:
+            self.start_up()
+            self.serve_forever()
 
-    def set_app(self, application) -> None:
-        self.application = application
-        self.start_up()
+    @property
+    def app(self) -> ASGIApp:
+        current_path = self.request_data.path
+        for route, app in self.apps.items():
+            if route == "/":
+                if current_path == route:
+                    return app
+            elif current_path.startswith(route):
+                self.request_data.path = current_path.replace(route, "")
+                return app
+        app = self.apps.get("/")
+        if app:
+            return app
+        raise HTTPError(404)
+
+    def add_app(self, application: ASGIApp, route: str = "/") -> None:
+        self.apps[route] = application
 
     def serve_forever(self) -> None:
         try:
             while True:
                 ready_to_read, _, _ = select.select(
-                    [self.listen_socket], [], [], SELECT_SLEEP_TIME
+                    [self.listen_socket], [], [], self.config.SELECT_SLEEP_TIME
                 )
                 if ready_to_read:
                     self.check_socket()
@@ -78,14 +107,21 @@ class QactuarServer(object):
     def check_socket(self) -> None:
         try:
             connection, _ = self.listen_socket.accept()
-        except IOError as e:
-            code, msg = e.args
-            if code != errno.EINTR:
+        except IOError as err:
+            if err.args[0] != errno.EINTR:
                 raise
         else:
-            if connection:
+            if len(self.processes) > self.config.MAX_PROCESSES:
+                self.response.status = b"503"
+                self.response.body.write(b"Too many requests")
+                connection.settimeout(self.config.RECV_TIMEOUT)
                 self.client_connection = connection
-                self.client_connection.settimeout(RECV_TIMEOUT)
+                self.finish_response()
+                self.response.status = b"200"
+                self.response.body.clear()
+            elif connection:
+                connection.settimeout(self.config.RECV_TIMEOUT)
+                self.client_connection = connection
                 self.fork()
 
     def fork(self) -> None:
@@ -100,17 +136,22 @@ class QactuarServer(object):
 
     def check_processes(self) -> None:
         current_time = time()
-        if current_time - self.time_last_cleaned_processes > CHECK_PROCESS_INTERVAL:
+        if (
+            current_time - self.time_last_cleaned_processes
+            > self.config.CHECK_PROCESS_INTERVAL
+        ):
             self.time_last_cleaned_processes = current_time
             for ident, process in list(self.processes.items()):
                 if not process.is_alive():
                     process.close()
                     del self.processes[ident]
 
+    def send_to_all_apps(self, scope: Scope, receive: Receive, send: Send) -> None:
+        for app in self.apps.values():
+            self.loop.run_until_complete(app(scope, receive, send))
+
     def start_up(self) -> None:
-        self.loop.run_until_complete(
-            self.application(LIFESPAN_SCOPE, self.lifespan_receive, self.send)
-        )
+        self.send_to_all_apps(LIFESPAN_SCOPE, self.lifespan_receive, self.send)
         self.logger.info(
             f"Qactuar: Serving {self.scheme.upper()} on {self.host}:{self.port}"
         )
@@ -118,36 +159,46 @@ class QactuarServer(object):
     def shut_down(self) -> None:
         self.shutting_down = True
         self.logger.info("Shutting Down")
-        self.loop.run_until_complete(
-            self.application(LIFESPAN_SCOPE, self.lifespan_receive, self.send)
-        )
+        self.send_to_all_apps(LIFESPAN_SCOPE, self.lifespan_receive, self.send)
         sys.exit(0)
 
     # TODO: http.disconnect when socket closes
 
     def handle_one_request(self) -> None:
-        self.raw_request_data = self.get_request_data()
-        if not self.raw_request_data:
-            self.close_socket()
-            return
-        self.client_connection.settimeout(None)
-        if (
-            self.request_data.headers["Connection"]
-            and self.request_data.headers["Upgrade"]
-        ):
-            self.ws_shake_hand()
-        self.loop.run_until_complete(
-            self.application(self.create_http_scope(), self.receive, self.send)
-        )
-        self.finish_response()
+        try:
+            self.get_request_data()
+            if not self.raw_request_data:
+                self.close_socket()
+                return
+            if (
+                self.request_data.headers["Connection"]
+                and self.request_data.headers["Upgrade"]
+            ):
+                self.ws_shake_hand()
+            app = self.app
+            self.loop.run_until_complete(
+                app(self.create_http_scope(), self.receive, self.send)
+            )
+            self.finish_response()
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except HTTPError as err:
+            self.response.status = str(err.args[0]).encode("utf-8")
+            self.response.body.write(str(err.args[0]).encode("utf-8"))
+            self.finish_response()
+        except Exception as err:
+            self.logger.exception(err)
+            self.response.status = b"500"
+            self.response.body.write(b"wat happen?!")
+            self.finish_response()
 
-    def get_request_data(self) -> bytes:
+    def get_request_data(self) -> None:
         request_data = BytesList()
         request = Request()
 
         while True:
             try:
-                request_data.write(self.client_connection.recv(RECV_BYTES))
+                request_data.write(self.client_connection.recv(self.config.RECV_BYTES))
             except socket.timeout:
                 request.raw_request = request_data.read()
                 if request.headers_complete:
@@ -160,9 +211,9 @@ class QactuarServer(object):
                     break
 
         self.request_data = request
-        return request_data.read()
+        self.raw_request_data = request_data.read()
 
-    async def send(self, data: Dict) -> None:
+    async def send(self, data: Message) -> None:
         if data["type"] == "http.response.start":
             self.response.status = str(data["status"]).encode("utf-8")
             self.response.headers = data["headers"]
@@ -180,7 +231,7 @@ class QactuarServer(object):
                 self.logger.error("App shutdown failed")
             self.logger.error(data["message"])
 
-    async def receive(self) -> Dict:
+    async def receive(self) -> Message:
         # TODO: support streaming from client
         return {
             "type": "http.request",
@@ -188,7 +239,7 @@ class QactuarServer(object):
             "more_body": False,
         }
 
-    async def lifespan_receive(self) -> Dict:
+    async def lifespan_receive(self) -> Message:
         return {
             "type": "lifespan.startup"
             if not self.shutting_down
@@ -202,7 +253,7 @@ class QactuarServer(object):
     def create_websocket(self):
         pass
 
-    def create_http_scope(self) -> Dict:
+    def create_http_scope(self) -> Scope:
         # TODO: Pseudo headers (present in HTTP/2 and HTTP/3) must be removed; if
         #  :authority is present its value must be added to the start of the iterable
         #  with host as the header name or replace any existing host header already
@@ -222,24 +273,11 @@ class QactuarServer(object):
             "server": (self.server_name, self.server_port),
         }
 
-    def compile_headers(self) -> List[Tuple[bytes, bytes]]:
-        server_headers = [
-            (b"Date", formatdate(mktime(datetime.now().timetuple())).encode("utf-8")),
-            (b"Server", b"Qactuar " + __version__.encode("utf-8")),
-        ]
-        return self.response.headers + server_headers
-
     def finish_response(self) -> None:
         try:
-            response_headers = self.compile_headers()
-            response = BytesList()
-            response.writelines(b"HTTP/1.1 ", self.response.status, b"\r\n")
-            for header in response_headers:
-                key, value = header
-                response.writelines(key, b": ", value, b"\r\n")
-            response.write(b"\r\n")
-            response.writelines(self.response.body.readlines())
-            self.client_connection.sendall(response.read())
+            self.client_connection.sendall(self.response.to_http())
+        except OSError as err:
+            self.logger.exception(err)
         finally:
             self.close_socket()
 

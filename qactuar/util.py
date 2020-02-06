@@ -20,5 +20,8 @@ class BytesList:
     def readlines(self) -> List[bytes]:
         return self._bytes_list
 
+    def clear(self) -> None:
+        self._bytes_list = []
+
     def __contains__(self, item):
         return item in self.read()

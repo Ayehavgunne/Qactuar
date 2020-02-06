@@ -19,6 +19,8 @@ setup(
     url="https://github.com/Ayehavgunne/Qactuar/",
     packages=find_packages(),
     install_requires=requirements,
-    extras_require={"dev": ["mypy", "black", "isort", "requests"]},
+    extras_require={
+        "dev": ["mypy", "black", "isort", "requests", "tonberry", "pytest"]
+    },
     python_requires=">=3.7",
 )
