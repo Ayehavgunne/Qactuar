@@ -1,3 +1,4 @@
+from qactuar.__version__ import VERSION
 from setuptools import find_packages, setup
 
 with open("README.md", "r") as fh:
@@ -8,7 +9,7 @@ with open("requirements.txt", "r") as fh:
 
 setup(
     name="Qactuar",
-    version="0.0.1",
+    version=VERSION,
     description="ASGI compliant web server",
     long_description=long_description,
     long_description_content_type="text/markdown",

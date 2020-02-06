@@ -19,24 +19,25 @@ from qactuar.util import BytesList
 CHECK_PROCESS_INTERVAL = 1
 SELECT_SLEEP_TIME = 0.025
 MAX_CHILD_PROCESSES = 100
-RECV_TIMEOUT = 0.01
+RECV_TIMEOUT = 0.001
 RECV_BYTES = 65536
+ASGI_VERSION = {"version": "2.0", "spec_version": "2.0"}
+LIFESPAN_SCOPE = {"type": "lifespan", "asgi": ASGI_VERSION}
 
 
 class QactuarServer(object):
     address_family = socket.AF_INET
     socket_type = socket.SOCK_STREAM
-    request_queue_size = 1024
+    socket_level = socket.SOL_SOCKET
+    socket_opt_name = socket.SO_REUSEADDR
+    request_queue_size = 65536
 
     def __init__(self, server_address: Tuple[str, int]):
         self.host, self.port = server_address
-        self.listen_socket = listen_socket = socket.socket(
-            self.address_family, self.socket_type
-        )
-
-        listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        listen_socket.bind(server_address)
-        listen_socket.listen(self.request_queue_size)
+        self.listen_socket = socket.socket(self.address_family, self.socket_type)
+        self.listen_socket.setsockopt(self.socket_level, self.socket_opt_name, 1)
+        self.listen_socket.bind(server_address)
+        self.listen_socket.listen(self.request_queue_size)
 
         self.server_name: str = socket.getfqdn(self.host)
         self.server_port: int = self.port
@@ -108,9 +109,7 @@ class QactuarServer(object):
 
     def start_up(self) -> None:
         self.loop.run_until_complete(
-            self.application(
-                self.create_lifespan_scope(), self.lifespan_receive, self.send
-            )
+            self.application(LIFESPAN_SCOPE, self.lifespan_receive, self.send)
         )
         self.logger.info(
             f"Qactuar: Serving {self.scheme.upper()} on {self.host}:{self.port}"
@@ -120,9 +119,7 @@ class QactuarServer(object):
         self.shutting_down = True
         self.logger.info("Shutting Down")
         self.loop.run_until_complete(
-            self.application(
-                self.create_lifespan_scope(), self.lifespan_receive, self.send
-            )
+            self.application(LIFESPAN_SCOPE, self.lifespan_receive, self.send)
         )
         sys.exit(0)
 
@@ -167,7 +164,7 @@ class QactuarServer(object):
 
     async def send(self, data: Dict) -> None:
         if data["type"] == "http.response.start":
-            self.response.status = data["status"]
+            self.response.status = str(data["status"]).encode("utf-8")
             self.response.headers = data["headers"]
         if data["type"] == "http.response.body":
             # TODO: check "more_body" and if true then do self.client_connection.send()
@@ -196,7 +193,7 @@ class QactuarServer(object):
             "type": "lifespan.startup"
             if not self.shutting_down
             else "lifespan.shutdown",
-            "asgi": {"version": "2.0", "spec_version": "2.0"},
+            "asgi": ASGI_VERSION,
         }
 
     def ws_shake_hand(self):
@@ -205,10 +202,6 @@ class QactuarServer(object):
     def create_websocket(self):
         pass
 
-    @staticmethod
-    def create_lifespan_scope() -> Dict:
-        return {"type": "lifespan", "asgi": {"version": "2.0", "spec_version": "2.0"}}
-
     def create_http_scope(self) -> Dict:
         # TODO: Pseudo headers (present in HTTP/2 and HTTP/3) must be removed; if
         #  :authority is present its value must be added to the start of the iterable
@@ -216,7 +209,7 @@ class QactuarServer(object):
         #  present.
         return {
             "type": "http",
-            "asgi": {"version": "2.0", "spec_version": "2.0"},
+            "asgi": ASGI_VERSION,
             "http_version": self.request_data.request_version_num,
             "method": self.request_data.command,
             "scheme": self.scheme,
@@ -240,17 +233,12 @@ class QactuarServer(object):
         try:
             response_headers = self.compile_headers()
             response = BytesList()
-            response.write(b"HTTP/1.1 ")
-            response.write(str(self.response.status).encode("utf-8"))
-            response.write(b"\r\n")
+            response.writelines(b"HTTP/1.1 ", self.response.status, b"\r\n")
             for header in response_headers:
                 key, value = header
-                response.write(key)
-                response.write(b": ")
-                response.write(value)
-                response.write(b"\r\n")
+                response.writelines(key, b": ", value, b"\r\n")
             response.write(b"\r\n")
-            response.write(self.response.body.read())
+            response.writelines(self.response.body.readlines())
             self.client_connection.sendall(response.read())
         finally:
             self.close_socket()
