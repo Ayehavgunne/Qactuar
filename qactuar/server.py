@@ -180,6 +180,7 @@ class QactuarServer(object):
     # TODO: http.disconnect when socket closes
 
     def handle_one_request(self) -> None:
+        self.loop = asyncio.new_event_loop()
         try:
             self.get_request_data()
             if not self.raw_request_data:
