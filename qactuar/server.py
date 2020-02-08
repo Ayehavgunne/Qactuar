@@ -143,7 +143,8 @@ class QactuarServer(object):
         process.daemon = True
         try:
             process.start()
-        except AttributeError:
+        except AttributeError as err:
+            self.logger.exception(err)
             self.logger.warning(f"Could not start process {process.ident}")
         else:
             self.processes[process.ident] = process
