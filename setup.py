@@ -7,6 +7,9 @@ with open("README.md", "r") as fh:
 with open("requirements.txt", "r") as fh:
     requirements = fh.readlines()
 
+with open("dev_requirements.txt", "r") as fh:
+    dev_requirements = fh.readlines()
+
 setup(
     name="Qactuar",
     version=VERSION,
@@ -19,8 +22,7 @@ setup(
     url="https://github.com/Ayehavgunne/Qactuar/",
     packages=find_packages(),
     install_requires=requirements,
-    extras_require={
-        "dev": ["mypy", "black", "isort", "requests", "tonberry", "pytest"]
-    },
+    extras_require={"dev": dev_requirements},
     python_requires=">=3.7",
+    entry_points={"console_scripts": ["qactuar=qactuar.__main__:main"]},
 )

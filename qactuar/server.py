@@ -2,6 +2,7 @@ import asyncio
 import errno
 import logging
 import multiprocessing
+import os
 import select
 import socket
 import sys
@@ -35,6 +36,8 @@ class QactuarServer(object):
         app: ASGIApp = None,
         config: Config = None,
     ):
+        if os.name != "nt":
+            multiprocessing.set_start_method("fork")
         self.config: Config = config or config_init()
 
         self.logger: Logger = logging.getLogger("Qactuar")
@@ -50,6 +53,13 @@ class QactuarServer(object):
         self.listen_socket.setsockopt(self.socket_level, self.socket_opt_name, 1)
         self.listen_socket.bind((self.host, self.port))
         self.listen_socket.listen(self.request_queue_size)
+
+        self.admin_socket: socket.socket = socket.socket(
+            self.address_family, self.socket_type
+        )
+        self.admin_socket.setsockopt(self.socket_level, self.socket_opt_name, 1)
+        self.admin_socket.bind((self.config.ADMIN_HOST, self.config.ADMIN_PORT))
+        self.admin_socket.listen(self.request_queue_size)
 
         self.server_name: str = socket.getfqdn(self.host)
         self.server_port: int = self.port
@@ -71,6 +81,9 @@ class QactuarServer(object):
         if self.apps:
             self.start_up()
             self.serve_forever()
+        else:
+            self.logger.error("No apps found")
+            self.shut_down()
 
     @property
     def app(self) -> ASGIApp:
@@ -125,6 +138,7 @@ class QactuarServer(object):
                 self.fork()
 
     def fork(self) -> None:
+        self.loop = asyncio.new_event_loop()
         process = multiprocessing.Process(target=self.handle_one_request)
         process.daemon = True
         try:
