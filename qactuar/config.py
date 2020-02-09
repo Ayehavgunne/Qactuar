@@ -13,6 +13,7 @@ class Config:
     ADMIN_HOST: str = "localhost"
     ADMIN_PORT: int = 8520
     LOG_LEVEL: str = "DEBUG"
+    ACCESS_LOGGING: bool = True
     CHECK_PROCESS_INTERVAL: int = 1
     SELECT_SLEEP_TIME: float = 0.025
     RECV_TIMEOUT: float = 0.001

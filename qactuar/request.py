@@ -2,6 +2,7 @@ import urllib.parse
 from typing import List, Tuple
 
 from qactuar.header import Header
+from qactuar.models import Headers
 from qactuar.util import BytesList
 
 
@@ -13,21 +14,21 @@ class Request:
         self._path: str = ""
         self._raw_path: bytes = b""
         self._query_string: bytes = b""
-        self._headers = []
+        self._headers: Headers = []
         self._parsed_headers: Header = Header()
         self._body: bytes = b""
         self.headers_complete = False
         if request:
             self.parse()
 
-    def parse(self):
+    def parse(self) -> None:
         lines = self._raw_request.split(b"\r\n")
 
-        command, self._path, request_version = lines.pop(0).split(b" ")
+        command, path, request_version = lines.pop(0).split(b" ")
         self._command = command.decode("utf-8")
         self._request_version = request_version.decode("utf-8")
 
-        path_parts = self._path.split(b"?")
+        path_parts = path.split(b"?")
         self._path = path_parts[0].decode("utf-8")
         self._raw_path = path_parts[0]
         if len(path_parts) > 1:
@@ -103,12 +104,12 @@ class Request:
             self._reset_values()
 
     def _reset_values(self) -> None:
-        self._command: str = ""
-        self._request_version: str = ""
-        self._path: str = ""
-        self._raw_path: bytes = b""
-        self._query_string: bytes = b""
+        self._command = ""
+        self._request_version = ""
+        self._path = ""
+        self._raw_path = b""
+        self._query_string = b""
         self._headers = []
-        self._parsed_headers: Header = Header()
-        self._body: bytes = b""
+        self._parsed_headers = Header()
+        self._body = b""
         self.headers_complete = False
