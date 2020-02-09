@@ -9,15 +9,12 @@ import sys
 from importlib import import_module
 from logging import Logger
 from time import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from qactuar.child_process import make_child
 from qactuar.config import Config, config_init
-from qactuar.exceptions import HTTPError
 from qactuar.handlers import HTTPHandler, LifespanHandler, WebSocketHandler
 from qactuar.models import ASGIApp, Receive, Scope, Send
-from qactuar.request import Request
-from qactuar.response import Response
 
 
 class QactuarServer(object):
@@ -66,12 +63,8 @@ class QactuarServer(object):
         self.server_name: str = socket.getfqdn(self.host)
         self.server_port: int = self.port
 
-        self.client_connection: Optional[socket.socket] = None
-        self.client_info = ("", 0)
+        self.client_info: Tuple[str, int] = ("", 0)
         self.scheme: str = "http"
-        self.raw_request_data: bytes = b""
-        self.request_data: Request = Request()
-        self.response: Response = Response()
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.processes: Dict[int, multiprocessing.Process] = {}
         self.shutting_down: bool = False
@@ -90,21 +83,6 @@ class QactuarServer(object):
         else:
             self.logger.error("No apps found")
             self.shut_down()
-
-    @property
-    def app(self) -> ASGIApp:
-        current_path = self.request_data.path
-        for route, app in self.apps.items():
-            if route == "/":
-                if current_path == route:
-                    return app
-            elif current_path.startswith(route):
-                self.request_data.path = current_path.replace(route, "")
-                return app
-        app = self.apps.get("/")  # type: ignore
-        if app:
-            return app
-        raise HTTPError(404)
 
     def add_app(self, application: ASGIApp, route: str = "/") -> None:
         self.apps[route] = application
@@ -140,34 +118,27 @@ class QactuarServer(object):
                     [self.listen_socket], [], [], self.config.SELECT_SLEEP_TIME
                 )
                 if ready_to_read:
-                    self.check_socket()
+                    client_socket = self.accept_client_connection()
+                    if client_socket:
+                        self.fork(client_socket)
                 self.check_processes()
         except KeyboardInterrupt:
             self.shut_down()
         except Exception as err:
             self.logger.exception(err)
 
-    def check_socket(self) -> None:
+    def accept_client_connection(self) -> Optional[socket.socket]:
         try:
-            connection, _ = self.listen_socket.accept()
-            connection.settimeout(self.config.RECV_TIMEOUT)
-            self.client_connection = connection
+            client_socket, self.client_info = self.listen_socket.accept()
         except IOError as err:
             if err.args[0] != errno.EINTR:
                 raise
+            return None  # for mypy
         else:
-            self.client_info = self.client_connection.getpeername()
-            if len(self.processes) > self.config.MAX_PROCESSES:
-                self.response.status = b"503"
-                self.response.body.write(b"Service Unavailable")
-                self.finish_response()
-                self.response.status = b"200"
-                self.response.body.clear()
-            elif connection:
-                self.fork()
+            return client_socket
 
-    def fork(self) -> None:
-        process = multiprocessing.Process(target=make_child, args=(self,))
+    def fork(self, client_socket: socket.socket) -> None:
+        process = multiprocessing.Process(target=make_child, args=(self, client_socket))
         process.daemon = True
         try:
             process.start()
@@ -190,21 +161,3 @@ class QactuarServer(object):
                 if not process.is_alive():
                     process.close()
                     del self.processes[ident]
-
-    # TODO: http.disconnect when socket closes
-    def finish_response(self) -> None:
-        try:
-            if self.client_connection:
-                self.client_connection.sendall(self.response.to_http())
-        except OSError as err:
-            self.logger.exception(err)
-        finally:
-            self.close_socket()
-
-    def close_socket(self) -> None:
-        if self.client_connection:
-            try:
-                self.client_connection.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
-            self.client_connection.close()

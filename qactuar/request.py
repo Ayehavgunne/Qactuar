@@ -9,7 +9,7 @@ from qactuar.util import BytesList
 class Request:
     def __init__(self, request: bytes = None):
         self._raw_request: bytes = request or b""
-        self._command: str = ""
+        self._method: str = ""
         self._request_version: str = ""
         self._path: str = ""
         self._raw_path: bytes = b""
@@ -24,8 +24,8 @@ class Request:
     def parse(self) -> None:
         lines = self._raw_request.split(b"\r\n")
 
-        command, path, request_version = lines.pop(0).split(b" ")
-        self._command = command.decode("utf-8")
+        method, path, request_version = lines.pop(0).split(b" ")
+        self._method = method.decode("utf-8")
         self._request_version = request_version.decode("utf-8")
 
         path_parts = path.split(b"?")
@@ -68,8 +68,8 @@ class Request:
         return self._request_version.replace("HTTP/", "")
 
     @property
-    def command(self) -> str:
-        return self._command
+    def method(self) -> str:
+        return self._method
 
     @property
     def path(self) -> str:
@@ -104,7 +104,7 @@ class Request:
             self._reset_values()
 
     def _reset_values(self) -> None:
-        self._command = ""
+        self._method = ""
         self._request_version = ""
         self._path = ""
         self._raw_path = b""
