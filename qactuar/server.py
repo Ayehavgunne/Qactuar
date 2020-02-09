@@ -14,6 +14,7 @@ from typing import Dict, Optional, Tuple
 from qactuar.child_process import make_child
 from qactuar.config import Config, config_init
 from qactuar.handlers import HTTPHandler, LifespanHandler, WebSocketHandler
+from qactuar.logs import QactuarLogger, create_server_logger
 from qactuar.models import ASGIApp, Receive, Scope, Send
 
 
@@ -39,9 +40,7 @@ class QactuarServer(object):
 
         self.config: Config = config or config_init()
 
-        self.logger: Logger = logging.getLogger("Qactuar")
-        self.logger.setLevel(getattr(logging, self.config.LOG_LEVEL))
-        self.logger.addHandler(logging.StreamHandler())
+        self.logger: QactuarLogger = create_server_logger()
 
         self.host: str = host or self.config.HOST
         self.port: int = port or self.config.PORT

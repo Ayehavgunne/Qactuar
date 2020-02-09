@@ -3,6 +3,7 @@ import multiprocessing
 import socket
 import sys
 from pathlib import Path
+from platform import system
 from typing import TYPE_CHECKING
 
 from qactuar.exceptions import HTTPError
@@ -123,27 +124,28 @@ class ChildProcess:
 
     def get_proc_stats(self) -> None:
         # see https://linux.die.net/man/5/proc
-        try:
-            pid = multiprocessing.current_process().pid
-            pid_path = Path("/proc") / str(pid)
+        if system() == "Linux":
+            try:
+                pid = multiprocessing.current_process().pid
+                pid_path = Path("/proc") / str(pid)
 
-            with (pid_path / "stat").open() as stat_file:
-                stats = stat_file.read()
-                sts = parse_proc_stat_line(stats)
-                self.logger.info(sts)
+                with (pid_path / "stat").open() as stat_file:
+                    stats = stat_file.read()
+                    sts = parse_proc_stat_line(stats)
+                    self.logger.info(sts)
 
-            with (pid_path / "io").open() as io_file:
-                io = io_file.read()
-                ios = parse_proc_io_line(io)
-                self.logger.info(ios)
+                with (pid_path / "io").open() as io_file:
+                    io = io_file.read()
+                    ios = parse_proc_io_line(io)
+                    self.logger.info(ios)
 
-            with (pid_path / "status").open() as status_file:
-                status = status_file.read()
-                stas = parse_proc_mem_line(status)
-                self.logger.info(stas)
+                with (pid_path / "status").open() as status_file:
+                    status = status_file.read()
+                    stas = parse_proc_mem_line(status)
+                    self.logger.info(stas)
 
-        except Exception as err:
-            self.access_logger.exception(err)
+            except Exception as err:
+                self.access_logger.exception(err)
 
 
 def make_child(server: "QactuarServer", client_socket: socket.socket) -> None:
