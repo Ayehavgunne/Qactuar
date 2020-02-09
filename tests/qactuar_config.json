@@ -1,6 +1,7 @@
 {
-  "LOG_LEVEL": "INFO",
   "APPS": {
-    "/": "tests.tonberry_app:app"
+    "/tonberry": "tests.tonberry_app:app",
+    "/tornado": "tests.tornado_app:app",
+    "/basic": "tests.basic_asgi_app:app"
   }
 }

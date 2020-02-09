@@ -12,6 +12,7 @@ class Request:
         self._method: str = ""
         self._request_version: str = ""
         self._path: str = ""
+        self._original_path: str = ""
         self._raw_path: bytes = b""
         self._query_string: bytes = b""
         self._headers: Headers = []
@@ -29,7 +30,8 @@ class Request:
         self._request_version = request_version.decode("utf-8")
 
         path_parts = path.split(b"?")
-        self._path = path_parts[0].decode("utf-8")
+        self._path = urllib.parse.unquote(path_parts[0].decode("utf-8"))
+        self._original_path = self._path
         self._raw_path = path_parts[0]
         if len(path_parts) > 1:
             query_string = path_parts[1]
@@ -73,11 +75,15 @@ class Request:
 
     @property
     def path(self) -> str:
-        return urllib.parse.unquote(self._path)
+        return self._path
 
     @path.setter
     def path(self, path: str) -> None:
-        self._path = path
+        self._path = urllib.parse.unquote(path)
+
+    @property
+    def original_path(self) -> str:
+        return self._original_path
 
     @property
     def raw_path(self) -> bytes:
@@ -107,6 +113,7 @@ class Request:
         self._method = ""
         self._request_version = ""
         self._path = ""
+        self._original_path = ""
         self._raw_path = b""
         self._query_string = b""
         self._headers = []

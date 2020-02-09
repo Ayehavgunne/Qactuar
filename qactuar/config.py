@@ -3,7 +3,44 @@ import os
 from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
+
+
+def default_log_config() -> Dict[str, Any]:
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {"format": "{asctime} {levelname} {message}", "style": "{"},
+            "access": {"format": "{asctime} ACCESS {message}", "style": "{"},
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "level": "DEBUG",
+                "formatter": "standard",
+                "stream": "ext://sys.stdout",
+            },
+            "access": {
+                "class": "logging.StreamHandler",
+                "level": "INFO",
+                "formatter": "access",
+                "stream": "ext://sys.stdout",
+            },
+            "exception": {
+                "class": "logging.StreamHandler",
+                "level": "ERROR",
+                "formatter": "standard",
+                "stream": "ext://sys.stderr",
+            },
+        },
+        "loggers": {
+            "qt_server": {"handlers": ["console"], "level": "DEBUG"},
+            "qt_child": {"handlers": ["console"], "level": "DEBUG"},
+            "qt_access": {"handlers": ["access"], "level": "INFO"},
+            "qt_exception": {"handlers": ["exception"], "level": "ERROR"},
+        },
+    }
 
 
 @dataclass
@@ -11,15 +48,16 @@ class Config:
     HOST: str = "localhost"
     PORT: int = 8000
     ADMIN_HOST: str = "localhost"
-    ADMIN_PORT: int = 8520
-    LOG_LEVEL: str = "DEBUG"
-    ACCESS_LOGGING: bool = True
+    ADMIN_PORT: int = 1986
     CHECK_PROCESS_INTERVAL: int = 1
     SELECT_SLEEP_TIME: float = 0.025
     RECV_TIMEOUT: float = 0.001
     RECV_BYTES: int = 65536
     MAX_PROCESSES: int = 500
+    GATHER_PROC_STATS: bool = False
+    REQUEST_TIMEOUT: float = 5
     APPS: Dict[str, str] = field(default_factory=dict)
+    LOGS: Dict[str, Any] = field(default_factory=default_log_config)
 
 
 def config_init() -> Config:

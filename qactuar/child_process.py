@@ -2,16 +2,16 @@ import asyncio
 import multiprocessing
 import socket
 import sys
+from logging import getLogger
 from pathlib import Path
 from platform import system
+from time import time
 from typing import TYPE_CHECKING
 
 from qactuar.exceptions import HTTPError
-from qactuar.logs import create_access_logger, create_child_logger
 from qactuar.request import Request
 from qactuar.response import Response
-from qactuar.util import (BytesList, parse_proc_io_line, parse_proc_mem_line,
-                          parse_proc_stat_line)
+from qactuar.util import BytesList, parse_proc_io, parse_proc_mem, parse_proc_stat
 
 if TYPE_CHECKING:
     from qactuar import QactuarServer, ASGIApp
@@ -21,8 +21,9 @@ class ChildProcess:
     def __init__(self, server: "QactuarServer", client_socket: socket.socket):
         self.loop = asyncio.new_event_loop()
         self.server = server
-        self.logger = create_child_logger()
-        self.access_logger = create_access_logger()
+        self.child_log = getLogger("qt_child")
+        self.access_log = getLogger("qt_access")
+        self.exception_log = getLogger("qt_exception")
         self.client_socket = client_socket
         self.response: Response = Response()
         self.raw_request_data: bytes = b""
@@ -69,23 +70,25 @@ class ChildProcess:
             self.response.status = str(err.args[0]).encode("utf-8")
             self.response.body.write(str(err.args[0]).encode("utf-8"))
         except Exception as err:
-            self.server.logger.exception(err)
+            self.exception_log.exception(err)
             self.response.status = b"500"
             self.response.body.write(b"Internal Server Error")
         finally:
-            if self.server.config.ACCESS_LOGGING:
-                self.access_logger.access(
-                    self.server.client_info,
-                    self.request_data.path,
-                    self.request_data.method,
-                    self.request_data.request_version_num,
-                    self.response.status,
+            if self.response:
+                self.access_log.info(
+                    f"{self.server.client_info[0]}:"
+                    f"{self.server.client_info[1]} "
+                    f"{self.request_data.method} "
+                    f"HTTP/{self.request_data.request_version_num} "
+                    f"{self.request_data.original_path or '/'} "
+                    f"{self.response.status.decode('utf-8')} "
                 )
             self.finish_response()
 
     def get_request_data(self) -> None:
         request_data = BytesList()
         request = Request()
+        start = time()
 
         while True:
             try:
@@ -93,6 +96,12 @@ class ChildProcess:
                     self.client_socket.recv(self.server.config.RECV_BYTES)
                 )
             except socket.timeout:
+                if not len(request_data):
+                    if time() - start > self.server.config.REQUEST_TIMEOUT:
+                        self.child_log.debug(
+                            f"no data received from request, timing out"
+                        )
+                        break
                 request.raw_request = request_data.read()
                 if request.headers_complete:
                     content_length = request.headers["content-length"]
@@ -109,11 +118,13 @@ class ChildProcess:
     # TODO: http.disconnect when socket closes
     def finish_response(self) -> None:
         try:
-            self.client_socket.sendall(self.response.to_http())
+            if self.response:
+                self.client_socket.sendall(self.response.to_http())
         except OSError as err:
-            self.access_logger.exception(err)
+            self.exception_log.exception(err)
         self.get_proc_stats()
         self.close_socket()
+        sys.exit(0)
 
     def close_socket(self) -> None:
         try:
@@ -124,28 +135,28 @@ class ChildProcess:
 
     def get_proc_stats(self) -> None:
         # see https://linux.die.net/man/5/proc
-        if system() == "Linux":
+        if system() == "Linux" and self.server.config.GATHER_PROC_STATS:
             try:
                 pid = multiprocessing.current_process().pid
                 pid_path = Path("/proc") / str(pid)
 
                 with (pid_path / "stat").open() as stat_file:
                     stats = stat_file.read()
-                    sts = parse_proc_stat_line(stats)
-                    self.logger.info(sts)
+                    sts = parse_proc_stat(stats)
+                    self.child_log.info(sts)
 
                 with (pid_path / "io").open() as io_file:
                     io = io_file.read()
-                    ios = parse_proc_io_line(io)
-                    self.logger.info(ios)
+                    ios = parse_proc_io(io)
+                    self.child_log.info(ios)
 
                 with (pid_path / "status").open() as status_file:
                     status = status_file.read()
-                    stas = parse_proc_mem_line(status)
-                    self.logger.info(stas)
+                    stas = parse_proc_mem(status)
+                    self.child_log.info(stas)
 
             except Exception as err:
-                self.access_logger.exception(err)
+                self.exception_log.exception(err)
 
 
 def make_child(server: "QactuarServer", client_socket: socket.socket) -> None:

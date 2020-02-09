@@ -1,20 +1,20 @@
 import asyncio
 import errno
-import logging
 import multiprocessing
 import os
 import select
 import socket
 import sys
 from importlib import import_module
-from logging import Logger
+from logging import Logger, getLogger, setLoggerClass
+from logging.config import dictConfig
 from time import time
 from typing import Dict, Optional, Tuple
 
 from qactuar.child_process import make_child
 from qactuar.config import Config, config_init
 from qactuar.handlers import HTTPHandler, LifespanHandler, WebSocketHandler
-from qactuar.logs import QactuarLogger, create_server_logger
+from qactuar.logs import QactuarLogger
 from qactuar.models import ASGIApp, Receive, Scope, Send
 
 
@@ -40,7 +40,11 @@ class QactuarServer(object):
 
         self.config: Config = config or config_init()
 
-        self.logger: QactuarLogger = create_server_logger()
+        setLoggerClass(QactuarLogger)
+        dictConfig(self.config.LOGS)
+
+        self.server_log: Logger = getLogger("qt_server")
+        self.exception_log: Logger = getLogger("qt_exception")
 
         self.host: str = host or self.config.HOST
         self.port: int = port or self.config.PORT
@@ -80,7 +84,7 @@ class QactuarServer(object):
             self.start_up()
             self.serve_forever()
         else:
-            self.logger.error("No apps found")
+            self.server_log.error("No apps found")
             self.shut_down()
 
     def add_app(self, application: ASGIApp, route: str = "/") -> None:
@@ -92,13 +96,13 @@ class QactuarServer(object):
             self.lifespan_handler.receive,
             self.lifespan_handler.send,
         )
-        self.logger.info(
+        self.server_log.info(
             f"Qactuar: Serving {self.scheme.upper()} on {self.host}:{self.port}"
         )
 
     def shut_down(self) -> None:
         self.shutting_down = True
-        self.logger.info("Shutting Down")
+        self.server_log.info("Shutting Down")
         self.send_to_all_apps(
             self.lifespan_handler.create_scope(),
             self.lifespan_handler.receive,
@@ -124,7 +128,7 @@ class QactuarServer(object):
         except KeyboardInterrupt:
             self.shut_down()
         except Exception as err:
-            self.logger.exception(err)
+            self.exception_log.exception(err)
 
     def accept_client_connection(self) -> Optional[socket.socket]:
         try:
@@ -142,8 +146,8 @@ class QactuarServer(object):
         try:
             process.start()
         except AttributeError as err:
-            self.logger.exception(err)
-            self.logger.warning(f"Could not start process {process.ident}")
+            self.exception_log.exception(err)
+            self.server_log.warning(f"Could not start process {process.ident}")
         else:
             ident = process.ident
             if ident:
@@ -151,10 +155,8 @@ class QactuarServer(object):
 
     def check_processes(self) -> None:
         current_time = time()
-        if (
-            current_time - self.time_last_cleaned_processes
-            > self.config.CHECK_PROCESS_INTERVAL
-        ):
+        last_time = self.time_last_cleaned_processes
+        if current_time - last_time > self.config.CHECK_PROCESS_INTERVAL:
             self.time_last_cleaned_processes = current_time
             for ident, process in list(self.processes.items()):
                 if not process.is_alive():

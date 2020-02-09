@@ -96,7 +96,7 @@ class LifespanHandler(Handler):
             or data["type"] == "lifespan.shutdown.failed"
         ):
             if "startup" in data["type"]:
-                self.server.logger.error("App startup failed")
+                self.server.server_log.error("App startup failed")
             if "shutdown" in data["type"]:
-                self.server.logger.error("App shutdown failed")
-            self.server.logger.error(data["message"])
+                self.server.server_log.error("App shutdown failed")
+            self.server.server_log.error(data["message"])
