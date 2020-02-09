@@ -44,7 +44,7 @@ def start(max_clients, max_conns):
         print(response)
     end_time = time()
     total_time = end_time - start_time
-    print(f"total time: {total_time}, avg: {(sum(ELAPSEDES)/len(ELAPSEDES))/1000}")
+    print(f"total time: {total_time}, avg: {(sum(ELAPSEDES)/len(ELAPSEDES))/1000} ms")
 
 
 if __name__ == "__main__":
