@@ -159,7 +159,7 @@ Individual parts of the log config cannot be changed by themselves.
 
 ### Future Config Options
 
-- ASYNCRONOUS_MODEL: Enum = 1
+- ASYNCRONOUS_MODEL: `Enum` = 1
 
 ## Tornado Apps
 Included is a utility wrapper to take a Tornado Request Handler and make it work
