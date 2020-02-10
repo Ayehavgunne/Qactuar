@@ -106,12 +106,12 @@ in the child processes), `qt_access` (used to log each request), `qt_exception`
     "disable_existing_loggers": false,
     "formatters": {
         "standard": {
-          "format": "{asctime} {levelname} {message}",
-          "style": "{"
+            "format": "{asctime} {levelname} {message}",
+            "style": "{"
         },
         "access": {
-          "format": "{asctime} ACCESS {message}",
-          "style": "{"
+            "format": "{asctime} ACCESS {message}",
+            "style": "{"
         }
     },
     "handlers": {
@@ -136,20 +136,20 @@ in the child processes), `qt_access` (used to log each request), `qt_exception`
     },
     "loggers": {
         "qt_server": {
-          "handlers": ["console"],
-          "level": "DEBUG"
+            "handlers": ["console"],
+            "level": "DEBUG"
         },
         "qt_child": {
-          "handlers": ["console"],
-          "level": "DEBUG"
+            "handlers": ["console"],
+            "level": "DEBUG"
         },
         "qt_access": {
-          "handlers": ["access"],
-          "level": "INFO"
+            "handlers": ["access"],
+            "level": "INFO"
         },
         "qt_exception": {
-          "handlers": ["exception"],
-          "level": "ERROR"
+            "handlers": ["exception"],
+            "level": "ERROR"
         }
     }
 }
