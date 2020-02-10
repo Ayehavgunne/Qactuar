@@ -1,4 +1,4 @@
-# Qactuar
+# Qactuar <img src="Qactuar.png" width="100" title="Qactuar">
 
 An ASGI compliant web server the goal of which is to support multiple
 asynchronous models. This started as a companion project to the
