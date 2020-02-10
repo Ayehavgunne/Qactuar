@@ -27,3 +27,6 @@ class Response:
         response.write(b"\r\n")
         response.writelines(self.body.readlines())
         return response.read()
+
+    def __bool__(self) -> bool:
+        return bool(self.headers) or bool(self.body)

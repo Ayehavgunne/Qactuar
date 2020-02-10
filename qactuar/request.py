@@ -2,33 +2,36 @@ import urllib.parse
 from typing import List, Tuple
 
 from qactuar.header import Header
+from qactuar.models import Headers
 from qactuar.util import BytesList
 
 
 class Request:
     def __init__(self, request: bytes = None):
         self._raw_request: bytes = request or b""
-        self._command: str = ""
+        self._method: str = ""
         self._request_version: str = ""
         self._path: str = ""
+        self._original_path: str = ""
         self._raw_path: bytes = b""
         self._query_string: bytes = b""
-        self._headers = []
+        self._headers: Headers = []
         self._parsed_headers: Header = Header()
         self._body: bytes = b""
         self.headers_complete = False
         if request:
             self.parse()
 
-    def parse(self):
+    def parse(self) -> None:
         lines = self._raw_request.split(b"\r\n")
 
-        command, self._path, request_version = lines.pop(0).split(b" ")
-        self._command = command.decode("utf-8")
+        method, path, request_version = lines.pop(0).split(b" ")
+        self._method = method.decode("utf-8")
         self._request_version = request_version.decode("utf-8")
 
-        path_parts = self._path.split(b"?")
-        self._path = path_parts[0].decode("utf-8")
+        path_parts = path.split(b"?")
+        self._path = urllib.parse.unquote(path_parts[0].decode("utf-8"))
+        self._original_path = self._path
         self._raw_path = path_parts[0]
         if len(path_parts) > 1:
             query_string = path_parts[1]
@@ -67,16 +70,20 @@ class Request:
         return self._request_version.replace("HTTP/", "")
 
     @property
-    def command(self) -> str:
-        return self._command
+    def method(self) -> str:
+        return self._method
 
     @property
     def path(self) -> str:
-        return urllib.parse.unquote(self._path)
+        return self._path
 
     @path.setter
     def path(self, path: str) -> None:
-        self._path = path
+        self._path = urllib.parse.unquote(path)
+
+    @property
+    def original_path(self) -> str:
+        return self._original_path
 
     @property
     def raw_path(self) -> bytes:
@@ -103,12 +110,13 @@ class Request:
             self._reset_values()
 
     def _reset_values(self) -> None:
-        self._command: str = ""
-        self._request_version: str = ""
-        self._path: str = ""
-        self._raw_path: bytes = b""
-        self._query_string: bytes = b""
+        self._method = ""
+        self._request_version = ""
+        self._path = ""
+        self._original_path = ""
+        self._raw_path = b""
+        self._query_string = b""
         self._headers = []
-        self._parsed_headers: Header = Header()
-        self._body: bytes = b""
+        self._parsed_headers = Header()
+        self._body = b""
         self.headers_complete = False
