@@ -82,7 +82,7 @@ provided.
 The `APPS` dictionary takes a `route` as the key and a `module:app` style string
 as the value. Multiple applications can be hosted at the same time by
 registering each at its own route. A basic example can be seen in the
-[qactuar_config.json](https://github.com/Ayehavgunne/Qactuar/blob/gh-pages/tests/qactuar_config.json)
+[qactuar_config.json](https://github.com/Ayehavgunne/Qactuar/blob/develop/tests/qactuar_config.json)
 file.
 
 ### The Config dataclass
@@ -165,7 +165,7 @@ Individual parts of the log config cannot be changed by themselves.
 ## Tornado Apps
 Included is a utility wrapper to take a Tornado Request Handler and make it work
 with ASGI. See
-[tornado_app.py](https://github.com/Ayehavgunne/Qactuar/blob/gh-pages/tests/tornado_app.py)
+[tornado_app.py](https://github.com/Ayehavgunne/Qactuar/blob/develop/tests/tornado_app.py)
 for an example.
 
 ## Admin
