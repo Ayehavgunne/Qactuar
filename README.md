@@ -85,7 +85,7 @@ as the value. Multiple applications can be hosted at the same time by
 registering each at its own route. A basic example can be seen in the
 [qactuar_config.json](tests/qactuar_config.json) file.
 
-## The Config dataclass
+### The Config dataclass
 The config is managed in a dataclass object and can be created programmatically.
 All arguments are optional and are defined above.
 ```python
