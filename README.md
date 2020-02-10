@@ -90,7 +90,6 @@ The config is managed in a dataclass object and can be created programmatically.
 All arguments are optional and are defined above.
 ```python
 config = qactuar.Config(HOST='0.0.0.0')
-
 qactuar.run(app=app, conf=config)
 ```
 
