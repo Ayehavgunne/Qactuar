@@ -162,6 +162,10 @@ Individual parts of the log config cannot be changed by themselves.
 
 - ASYNCRONOUS_MODEL: Enum = 1
 
+## Tornado Apps
+Included is a utility wrapper to take a Tornado Request Handler and make it work
+with ASGI. See [tornado_app.py](tests/tornado_app.py) for an example.
+
 ## Admin
 The plan is to support an extra socket connection that can accept connections
 for adminitrative purposes. Maybe for viewing system recources, viewing the
