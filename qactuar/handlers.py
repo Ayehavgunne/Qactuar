@@ -57,7 +57,7 @@ class HTTPHandler(Handler):
         if self.child:
             if data["type"] == "http.response.start":
                 self.child.response.status = str(data["status"]).encode("utf-8")
-                self.child.response.headers = data["headers"]
+                self.child.response.headers += data["headers"]
             if data["type"] == "http.response.body":
                 # TODO: check "more_body" and if true then do
                 #  self.server.client_connection.send() to send the current data

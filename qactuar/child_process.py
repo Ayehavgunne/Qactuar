@@ -7,6 +7,7 @@ from pathlib import Path
 from platform import system
 from time import time
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from qactuar.exceptions import HTTPError
 from qactuar.request import Request
@@ -28,6 +29,7 @@ class ChildProcess:
         self.response: Response = Response()
         self.raw_request_data: bytes = b""
         self.request_data: Request = Request()
+        self.request_id: str = str(uuid4())
         client_socket.settimeout(server.config.RECV_TIMEOUT)
 
     @property
@@ -76,12 +78,16 @@ class ChildProcess:
         finally:
             if self.response:
                 self.access_log.info(
-                    f"{self.server.client_info[0]}:"
-                    f"{self.server.client_info[1]} "
-                    f"{self.request_data.method} "
-                    f"HTTP/{self.request_data.request_version_num} "
-                    f"{self.request_data.original_path or '/'} "
-                    f"{self.response.status.decode('utf-8')} "
+                    "",
+                    extra={
+                        "host": self.server.client_info[0],
+                        "port": self.server.client_info[1],
+                        "request_id": self.request_id,
+                        "method": self.request_data.method,
+                        "http_version": self.request_data.request_version_num,
+                        "path": self.request_data.original_path or "/",
+                        "status": self.response.status.decode("utf-8"),
+                    },
                 )
             self.finish_response()
 
@@ -99,7 +105,7 @@ class ChildProcess:
                 if not len(request_data):
                     if time() - start > self.server.config.REQUEST_TIMEOUT:
                         self.child_log.debug(
-                            f"no data received from request, timing out"
+                            "no data received from request, timing out"
                         )
                         break
                 request.raw_request = request_data.read()
@@ -119,6 +125,7 @@ class ChildProcess:
     def finish_response(self) -> None:
         try:
             if self.response:
+                self.response.add_header("x-request-id", self.request_id)
                 self.client_socket.sendall(self.response.to_http())
         except OSError as err:
             self.exception_log.exception(err)
