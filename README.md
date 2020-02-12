@@ -38,7 +38,7 @@ without any arguments.
 $ qactuar
 ```
 
-### Programatically
+### Programmatically
 ```python
 from tonberry import create_app, expose
 from tonberry.content_types import TextPlain
