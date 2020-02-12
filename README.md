@@ -1,5 +1,4 @@
-Qactuar
--------
+# Qactuar <img src="Qactuar.png" width="100" title="Qactuar">
 
 An ASGI compliant web server the goal of which is to support multiple
 asynchronous models. This started as a companion project to the
@@ -83,14 +82,14 @@ provided.
 The `APPS` dictionary takes a `route` as the key and a `module:app` style string
 as the value. Multiple applications can be hosted at the same time by
 registering each at its own route. A basic example can be seen in the
-[qactuar_config.json](tests/qactuar_config.json) file.
+[qactuar_config.json](https://github.com/Ayehavgunne/Qactuar/blob/develop/tests/qactuar_config.json)
+file.
 
-## The Config dataclass
+### The Config dataclass
 The config is managed in a dataclass object and can be created programmatically.
 All arguments are optional and are defined above.
 ```python
 config = qactuar.Config(HOST='0.0.0.0')
-
 qactuar.run(app=app, conf=config)
 ```
 
@@ -108,12 +107,12 @@ in the child processes), `qt_access` (used to log each request), `qt_exception`
     "disable_existing_loggers": false,
     "formatters": {
         "standard": {
-          "format": "{asctime} {levelname} {message}",
-          "style": "{"
+            "format": "{asctime} {levelname} {message}",
+            "style": "{"
         },
         "access": {
-          "format": "{asctime} ACCESS {message}",
-          "style": "{"
+            "format": "{asctime} ACCESS {message}",
+            "style": "{"
         }
     },
     "handlers": {
@@ -138,20 +137,20 @@ in the child processes), `qt_access` (used to log each request), `qt_exception`
     },
     "loggers": {
         "qt_server": {
-          "handlers": ["console"],
-          "level": "DEBUG"
+            "handlers": ["console"],
+            "level": "DEBUG"
         },
         "qt_child": {
-          "handlers": ["console"],
-          "level": "DEBUG"
+            "handlers": ["console"],
+            "level": "DEBUG"
         },
         "qt_access": {
-          "handlers": ["access"],
-          "level": "INFO"
+            "handlers": ["access"],
+            "level": "INFO"
         },
         "qt_exception": {
-          "handlers": ["exception"],
-          "level": "ERROR"
+            "handlers": ["exception"],
+            "level": "ERROR"
         }
     }
 }
@@ -161,7 +160,13 @@ Individual parts of the log config cannot be changed by themselves.
 
 ### Future Config Options
 
-- ASYNCRONOUS_MODEL: Enum = 1
+- ASYNCRONOUS_MODEL: `Enum` = 1
+
+## Tornado Apps
+Included is a utility wrapper to take a Tornado Request Handler and make it work
+with ASGI. See
+[tornado_app.py](https://github.com/Ayehavgunne/Qactuar/blob/develop/tests/tornado_app.py)
+for an example.
 
 ## Admin
 The plan is to support an extra socket connection that can accept connections
