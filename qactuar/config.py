@@ -12,7 +12,11 @@ def default_log_config() -> Dict[str, Any]:
         "disable_existing_loggers": False,
         "formatters": {
             "standard": {"format": "{asctime} {levelname} {message}", "style": "{"},
-            "access": {"format": "{asctime} ACCESS {message}", "style": "{"},
+            "access": {
+                "format": "{asctime} ACCESS {host}:{port} {request_id} {method} "
+                "HTTP/{http_version} {path} {status} {message}",
+                "style": "{",
+            },
         },
         "handlers": {
             "console": {

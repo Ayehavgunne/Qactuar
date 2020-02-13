@@ -161,6 +161,8 @@ Individual parts of the log config cannot be changed by themselves.
 ### Future Config Options
 
 - ASYNCRONOUS_MODEL: `Enum` = 1
+- SSL_CERT_PATH: `str` = ""
+- SSL_KEY_PATH: `str` = ""
 
 ## Tornado Apps
 Included is a utility wrapper to take a Tornado Request Handler and make it work

@@ -30,3 +30,6 @@ class Response:
 
     def __bool__(self) -> bool:
         return bool(self.headers) or bool(self.body)
+
+    def add_header(self, name: str, value: str) -> None:
+        self.headers.append((name.encode("utf-8"), value.encode("utf-8")))
