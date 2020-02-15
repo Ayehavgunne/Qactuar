@@ -1,20 +1,23 @@
+from base64 import standard_b64encode
+from hashlib import sha1
 from typing import TYPE_CHECKING, Optional
 
-from qactuar.child_process import ChildProcess
 from qactuar.models import Message, Scope
+from qactuar.processes.base import BaseProcessHandler
 
 if TYPE_CHECKING:
     from qactuar import QactuarServer
 
 ASGI_VERSION = {"version": "2.0", "spec_version": "2.0"}
+MAGIC_STRING = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 class Handler:
     def __init__(self, server: "QactuarServer"):
         self.server = server
-        self.child: Optional[ChildProcess] = None
+        self.child: Optional[BaseProcessHandler] = None
 
-    def set_child(self, child: ChildProcess) -> None:
+    def set_child(self, child: BaseProcessHandler) -> None:
         self.child = child
 
 
@@ -68,7 +71,16 @@ class HTTPHandler(Handler):
 
 class WebSocketHandler(Handler):
     def ws_shake_hand(self) -> None:
-        pass
+        if self.child:
+            websocket_key = self.child.request_data.headers["Sec-WebSocket-Key"]
+            if websocket_key:
+                websocket_accept = standard_b64encode(
+                    sha1(websocket_key.encode("utf-8") + MAGIC_STRING).digest()
+                )
+                self.child.response.status = b"101 Switching Protocols"
+                self.child.response.add_header("Upgrade", "websocket")
+                self.child.response.add_header("Connection", "Upgrade")
+                self.child.response.add_header("Sec-WebSocket-Accept", websocket_accept)
 
     def create_websocket(self) -> None:
         pass

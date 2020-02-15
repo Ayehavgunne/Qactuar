@@ -9,13 +9,14 @@ from importlib import import_module
 from logging import Logger, getLogger, setLoggerClass
 from logging.config import dictConfig
 from time import time
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
-from qactuar.child_process import make_child
 from qactuar.config import Config, config_init
 from qactuar.handlers import HTTPHandler, LifespanHandler, WebSocketHandler
 from qactuar.logs import QactuarLogger
 from qactuar.models import ASGIApp, Receive, Scope, Send
+from qactuar.processes.admin import make_admin
+from qactuar.processes.child import make_child
 
 
 class QactuarServer(object):
@@ -117,22 +118,30 @@ class QactuarServer(object):
     def serve_forever(self) -> None:
         try:
             while True:
-                ready_to_read, _, _ = select.select(
-                    [self.listen_socket], [], [], self.config.SELECT_SLEEP_TIME
-                )
-                if ready_to_read:
-                    client_socket = self.accept_client_connection()
-                    if client_socket:
-                        self.fork(client_socket)
+                self.select_socket(self.listen_socket, process_handler=make_child)
+                self.select_socket(self.admin_socket, process_handler=make_admin)
                 self.check_processes()
         except KeyboardInterrupt:
             self.shut_down()
         except Exception as err:
             self.exception_log.exception(err)
 
-    def accept_client_connection(self) -> Optional[socket.socket]:
+    def select_socket(
+        self, listening_socket: socket.socket, process_handler: Callable
+    ) -> None:
+        ready_to_read, _, _ = select.select(
+            [listening_socket], [], [], self.config.SELECT_SLEEP_TIME
+        )
+        if ready_to_read:
+            accepted_socket = self.accept_client_connection(listening_socket)
+            if accepted_socket:
+                self.fork(accepted_socket, process_handler)
+
+    def accept_client_connection(
+        self, listening_socket: socket.socket
+    ) -> Optional[socket.socket]:
         try:
-            client_socket, self.client_info = self.listen_socket.accept()
+            client_socket, self.client_info = listening_socket.accept()
         except IOError as err:
             if err.args[0] != errno.EINTR:
                 raise
@@ -140,8 +149,10 @@ class QactuarServer(object):
         else:
             return client_socket
 
-    def fork(self, client_socket: socket.socket) -> None:
-        process = multiprocessing.Process(target=make_child, args=(self, client_socket))
+    def fork(self, client_socket: socket.socket, process_handler: Callable) -> None:
+        process = multiprocessing.Process(
+            target=process_handler, args=(self, client_socket)
+        )
         process.daemon = True
         try:
             process.start()

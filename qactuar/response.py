@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from email.utils import formatdate
 from time import mktime
+from typing import Union
 
 from qactuar.__version__ import VERSION
 from qactuar.models import Headers
@@ -31,5 +32,13 @@ class Response:
     def __bool__(self) -> bool:
         return bool(self.headers) or bool(self.body)
 
-    def add_header(self, name: str, value: str) -> None:
-        self.headers.append((name.encode("utf-8"), value.encode("utf-8")))
+    def add_header(self, name: Union[str, bytes], value: Union[str, bytes]) -> None:
+        if isinstance(name, str):
+            header_name = name.encode("utf-8")
+        else:
+            header_name = name
+        if isinstance(value, str):
+            header_value = value.encode("utf-8")
+        else:
+            header_value = value
+        self.headers.append((header_name, header_value))

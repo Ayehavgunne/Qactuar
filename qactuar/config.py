@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 def default_log_config() -> Dict[str, Any]:
@@ -15,6 +15,10 @@ def default_log_config() -> Dict[str, Any]:
             "access": {
                 "format": "{asctime} ACCESS {host}:{port} {request_id} {method} "
                 "HTTP/{http_version} {path} {status} {message}",
+                "style": "{",
+            },
+            "exception": {
+                "format": "{asctime} {levelname} {request_id} {message}",
                 "style": "{",
             },
         },
@@ -34,7 +38,7 @@ def default_log_config() -> Dict[str, Any]:
             "exception": {
                 "class": "logging.StreamHandler",
                 "level": "ERROR",
-                "formatter": "standard",
+                "formatter": "exception",
                 "stream": "ext://sys.stderr",
             },
         },
@@ -45,6 +49,10 @@ def default_log_config() -> Dict[str, Any]:
             "qt_exception": {"handlers": ["exception"], "level": "ERROR"},
         },
     }
+
+
+def default_psutil_methods() -> List[str]:
+    return ["cpu_times", "io_counters", "memory_info"]
 
 
 @dataclass
@@ -58,8 +66,10 @@ class Config:
     RECV_TIMEOUT: float = 0.001
     RECV_BYTES: int = 65536
     MAX_PROCESSES: int = 500
-    GATHER_PROC_STATS: bool = False
     REQUEST_TIMEOUT: float = 5
+    GATHER_PROC_STATS: bool = False
+    # see https://psutil.readthedocs.io/en/latest/#process-class for available methods
+    PSUTIL_STAT_METHODS: List[str] = field(default_factory=default_psutil_methods)
     APPS: Dict[str, str] = field(default_factory=dict)
     LOGS: Dict[str, Any] = field(default_factory=default_log_config)
 
