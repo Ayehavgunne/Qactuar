@@ -4,6 +4,7 @@ import multiprocessing
 import os
 import select
 import socket
+import ssl
 import sys
 from importlib import import_module
 from logging import Logger, getLogger, setLoggerClass
@@ -17,6 +18,11 @@ from qactuar.logs import QactuarLogger
 from qactuar.models import ASGIApp, Receive, Scope, Send
 from qactuar.processes.admin import make_admin
 from qactuar.processes.child import make_child
+
+try:
+    import psutil  # type: ignore
+except ImportError:
+    psutil = None
 
 
 class QactuarServer(object):
@@ -49,6 +55,7 @@ class QactuarServer(object):
 
         self.host: str = host or self.config.HOST
         self.port: int = port or self.config.PORT
+        self.scheme: str = "http"
 
         self.listen_socket: socket.socket = socket.socket(
             self.address_family, self.socket_type
@@ -63,12 +70,16 @@ class QactuarServer(object):
         self.admin_socket.setsockopt(self.socket_level, self.socket_opt_name, 1)
         self.admin_socket.bind((self.config.ADMIN_HOST, self.config.ADMIN_PORT))
         self.admin_socket.listen(self.request_queue_size)
+        self.admin_queue: multiprocessing.Queue = multiprocessing.Queue()
+
+        self.ssl_context: Optional[ssl.SSLContext] = None
+        if self.config.SSL_CERT_PATH and self.config.SSL_KEY_PATH:
+            self.setup_ssl()
 
         self.server_name: str = socket.getfqdn(self.host)
         self.server_port: int = self.port
 
         self.client_info: Tuple[str, int] = ("", 0)
-        self.scheme: str = "http"
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.processes: Dict[int, multiprocessing.Process] = {}
         self.shutting_down: bool = False
@@ -111,6 +122,14 @@ class QactuarServer(object):
         )
         sys.exit(0)
 
+    def setup_ssl(self):
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(self.config.SSL_CERT_PATH, self.config.SSL_KEY_PATH)
+        context.options |= ssl.PROTOCOL_TLS
+        context.set_ciphers("EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH")
+        self.ssl_context = context
+        self.scheme = "https"
+
     def send_to_all_apps(self, scope: Scope, receive: Receive, send: Send) -> None:
         for app in self.apps.values():
             self.loop.run_until_complete(app(scope, receive, send))
@@ -120,6 +139,7 @@ class QactuarServer(object):
             while True:
                 self.select_socket(self.listen_socket, process_handler=make_child)
                 self.select_socket(self.admin_socket, process_handler=make_admin)
+                self.check_admin_queue()
                 self.check_processes()
         except KeyboardInterrupt:
             self.shut_down()
@@ -173,3 +193,8 @@ class QactuarServer(object):
                 if not process.is_alive():
                     process.close()
                     del self.processes[ident]
+
+    def check_admin_queue(self) -> None:
+        while not self.admin_queue.empty():
+            # do stuff with admin messages
+            self.server_log.info(self.admin_queue.get())

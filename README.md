@@ -74,8 +74,11 @@ provided.
 - RECV_TIMEOUT: `float` = 0.001
 - RECV_BYTES: `int` = 65536
 - MAX_PROCESSES: `int` = 500
-- GATHER_PROC_STATS: `bool` = False
 - REQUEST_TIMEOUT: `float` = 5
+- GATHER_PROC_STATS: `bool` = False
+- PSUTIL_STAT_METHODS: List[str] = ["cpu_times", "io_counters", "memory_info"]
+- SSL_CERT_PATH: `str` = ""
+- SSL_KEY_PATH: `str` = ""
 - APPS: `Dict[str, str]` = {}
 - LOGS: `Dict[str, Any]` = *default_log_setup (see below)*
 
@@ -161,8 +164,6 @@ Individual parts of the log config cannot be changed by themselves.
 ### Future Config Options
 
 - ASYNCRONOUS_MODEL: `Enum` = 1
-- SSL_CERT_PATH: `str` = ""
-- SSL_KEY_PATH: `str` = ""
 
 ## Tornado Apps
 Included is a utility wrapper to take a Tornado Request Handler and make it work
@@ -199,9 +200,8 @@ This project is licensed under the MIT License - see the
 - Admin socket
 - [UPD](https://channels.readthedocs.io/en/1.x/asgi/udp.html) support
 - WebSockets
-- Send http.disconnect to app when each socket closes
 - Filter HTTP/2-3 pseudo headers
-- Client streaming, check "more_body" in send method
+- Client streaming
 - Async only model
 - Pre-Fork model
 - TESTS!!!

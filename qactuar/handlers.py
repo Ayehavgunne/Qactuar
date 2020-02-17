@@ -3,7 +3,7 @@ from hashlib import sha1
 from typing import TYPE_CHECKING, Optional
 
 from qactuar.models import Message, Scope
-from qactuar.processes.base import BaseProcessHandler
+from qactuar.processes.child import ChildProcess
 
 if TYPE_CHECKING:
     from qactuar import QactuarServer
@@ -15,9 +15,9 @@ MAGIC_STRING = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 class Handler:
     def __init__(self, server: "QactuarServer"):
         self.server = server
-        self.child: Optional[BaseProcessHandler] = None
+        self.child: Optional[ChildProcess] = None
 
-    def set_child(self, child: BaseProcessHandler) -> None:
+    def set_child(self, child: ChildProcess) -> None:
         self.child = child
 
 
@@ -48,11 +48,16 @@ class HTTPHandler(Handler):
     async def receive(self) -> Message:
         # TODO: support streaming from client
         if self.child:
-            return {
-                "type": "http.request",
-                "body": self.child.request_data.body,
-                "more_body": False,
-            }
+            if self.child.closing:
+                return {
+                    "type": "http.disconnect",
+                }
+            else:
+                return {
+                    "type": "http.request",
+                    "body": self.child.request_data.body,
+                    "more_body": False,
+                }
         else:
             raise AttributeError
 

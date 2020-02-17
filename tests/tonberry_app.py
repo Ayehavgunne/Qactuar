@@ -12,7 +12,7 @@ class Root:
         return f"Hello {thing} {num}"
 
     @expose.post
-    async def what(self, thing, num) -> TextPlain:
+    async def what(self, thing=None, num=None) -> TextPlain:
         return f"Go away {thing} {num}"
 
     @expose.get

@@ -21,6 +21,7 @@ def default_log_config() -> Dict[str, Any]:
                 "format": "{asctime} {levelname} {request_id} {message}",
                 "style": "{",
             },
+            "stats": {"format": "{message}", "style": "{"},
         },
         "handlers": {
             "console": {
@@ -41,12 +42,19 @@ def default_log_config() -> Dict[str, Any]:
                 "formatter": "exception",
                 "stream": "ext://sys.stderr",
             },
+            "stats": {
+                "class": "logging.StreamHandler",
+                "level": "INFO",
+                "formatter": "stats",
+                "stream": "ext://sys.stdout",
+            },
         },
         "loggers": {
             "qt_server": {"handlers": ["console"], "level": "DEBUG"},
             "qt_child": {"handlers": ["console"], "level": "DEBUG"},
             "qt_access": {"handlers": ["access"], "level": "INFO"},
             "qt_exception": {"handlers": ["exception"], "level": "ERROR"},
+            "qt_stats": {"handlers": ["stats"], "level": "INFO"},
         },
     }
 
@@ -70,6 +78,9 @@ class Config:
     GATHER_PROC_STATS: bool = False
     # see https://psutil.readthedocs.io/en/latest/#process-class for available methods
     PSUTIL_STAT_METHODS: List[str] = field(default_factory=default_psutil_methods)
+    SSL_CERT_PATH: str = ""
+    SSL_KEY_PATH: str = ""
+
     APPS: Dict[str, str] = field(default_factory=dict)
     LOGS: Dict[str, Any] = field(default_factory=default_log_config)
 

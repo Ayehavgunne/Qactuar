@@ -11,7 +11,7 @@ THREADS = []
 
 def connect(num, host, port, path):
     response = requests.post(
-        f"http://{host}:{port}{path}", data={"thing": LOREM_IPSUM, "num": num}
+        f"http://{host}:{port}{path}", data={"thing": "stuff", "num": num}
     )
     elapsed = response.elapsed
     ELAPSEDES.append(elapsed.microseconds)

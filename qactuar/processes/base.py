@@ -1,9 +1,10 @@
 import asyncio
 import socket
+import ssl
 import sys
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from qactuar.exceptions import HTTPError
@@ -32,12 +33,30 @@ class BaseProcessHandler:
         self.raw_request_data: bytes = b""
         self.request_data: Request = Request()
         self.request_id: str = str(uuid4())
-        client_socket.settimeout(server.config.RECV_TIMEOUT)
+        if self.server.ssl_context is None:
+            client_socket.settimeout(server.config.RECV_TIMEOUT)
+
+    def setup_ssl(self):
+        ssl_socket = self.server.ssl_context.wrap_socket(
+            self.client_socket, server_side=True, do_handshake_on_connect=False
+        )
+        try:
+            ssl_socket.do_handshake()
+        except ssl.SSLError as err:
+            if err.args[1].find("sslv3 alert") == -1:
+                self.exception_log.exception(err)
+                raise HTTPError(403)
+            else:
+                self.client_socket = ssl_socket
+        else:
+            self.client_socket = ssl_socket
+        self.client_socket.settimeout(self.server.config.RECV_TIMEOUT)
 
     def start(self) -> None:
-        self.server.http_handler.set_child(self)
-        self.get_request_data()
         try:
+            if self.server.ssl_context is not None:
+                self.setup_ssl()
+            self.get_request_data()
             self.handle_request()
         except KeyboardInterrupt:
             sys.exit(0)
@@ -94,7 +113,6 @@ class BaseProcessHandler:
         self.request_data = request
         self.raw_request_data = request_data.read()
 
-    # TODO: http.disconnect when socket closes
     def finish_response(self) -> None:
         try:
             if self.response:
@@ -113,4 +131,4 @@ class BaseProcessHandler:
         self.client_socket.close()
 
     def handle_request(self) -> None:
-        pass
+        raise NotImplementedError
