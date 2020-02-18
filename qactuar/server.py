@@ -122,7 +122,7 @@ class QactuarServer(object):
         )
         sys.exit(0)
 
-    def setup_ssl(self):
+    def setup_ssl(self) -> None:
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(self.config.SSL_CERT_PATH, self.config.SSL_KEY_PATH)
         context.options |= ssl.PROTOCOL_TLS

@@ -8,3 +8,7 @@ class HTTPError(QactuarException):
 
 class RouteNotFoundError(QactuarException):
     pass
+
+
+class WebSocketError(QactuarException):
+    pass

@@ -7,13 +7,7 @@ class QactuarLogger(Logger):
         super().__init__(name, level)
 
     def exception(  # type: ignore
-        self,
-        msg: Any,
-        *args: Any,
-        exc_info=None,
-        stack_info: bool = False,
-        extra: Optional[Dict[str, Any]] = None,
-        **kwargs: Any
+        self, msg: Any, extra: Optional[Dict[str, Any]] = None, **kwargs: Any
     ) -> None:
         """
         The exception loggers formatter has the option of referencing a request_id. If
@@ -24,4 +18,4 @@ class QactuarLogger(Logger):
         extra = extra or {"request_id": ""}
         if "request_id" not in extra:
             extra["request_id"] = ""
-        super().exception(msg, *args, exc_info=exc_info, extra=extra, **kwargs)
+        super().exception(msg, extra=extra, **kwargs)

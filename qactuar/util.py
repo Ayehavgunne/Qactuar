@@ -37,10 +37,27 @@ class BytesList:
         return len(self) > 0
 
 
+class BytesReader:
+    def __init__(self, data: bytes = None):
+        self.data = data or bytes()
+        self.pos = 0
+
+    def read(self, length: int) -> bytes:
+        data = self.data[self.pos : self.pos + length]
+        self.pos += length
+        return data
+
+
 def to_bytes(value: Any) -> bytes:
     if isinstance(value, bytes):
         return value
     return str(value).encode("utf-8")
+
+
+def to_str(value: Any) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return str(value)
 
 
 try:

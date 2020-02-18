@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional
 
 from qactuar.models import Message, Scope
 from qactuar.processes.child import ChildProcess
+from qactuar.websocket import WebSocket
 
 if TYPE_CHECKING:
     from qactuar import QactuarServer
@@ -77,7 +78,7 @@ class HTTPHandler(Handler):
 class WebSocketHandler(Handler):
     def ws_shake_hand(self) -> None:
         if self.child:
-            websocket_key = self.child.request_data.headers["Sec-WebSocket-Key"]
+            websocket_key = self.child.request_data.headers["sec-websocket-key"]
             if websocket_key:
                 websocket_accept = standard_b64encode(
                     sha1(websocket_key.encode("utf-8") + MAGIC_STRING).digest()
@@ -86,9 +87,6 @@ class WebSocketHandler(Handler):
                 self.child.response.add_header("Upgrade", "websocket")
                 self.child.response.add_header("Connection", "Upgrade")
                 self.child.response.add_header("Sec-WebSocket-Accept", websocket_accept)
-
-    def create_websocket(self) -> None:
-        pass
 
     def send(self, data: Message) -> None:
         pass

@@ -29,6 +29,11 @@ class Response:
         response.writelines(self.body.readlines())
         return response.read()
 
+    def clear(self) -> None:
+        self.status = b"200"
+        self.headers = []
+        self.body.clear()
+
     def __bool__(self) -> bool:
         return bool(self.headers) or bool(self.body)
 

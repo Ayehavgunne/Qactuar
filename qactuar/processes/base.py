@@ -36,21 +36,22 @@ class BaseProcessHandler:
         if self.server.ssl_context is None:
             client_socket.settimeout(server.config.RECV_TIMEOUT)
 
-    def setup_ssl(self):
-        ssl_socket = self.server.ssl_context.wrap_socket(
-            self.client_socket, server_side=True, do_handshake_on_connect=False
-        )
-        try:
-            ssl_socket.do_handshake()
-        except ssl.SSLError as err:
-            if err.args[1].find("sslv3 alert") == -1:
-                self.exception_log.exception(err)
-                raise HTTPError(403)
+    def setup_ssl(self) -> None:
+        if self.server.ssl_context:
+            ssl_socket = self.server.ssl_context.wrap_socket(
+                self.client_socket, server_side=True, do_handshake_on_connect=False
+            )
+            try:
+                ssl_socket.do_handshake()
+            except ssl.SSLError as err:
+                if err.args[1].find("sslv3 alert") == -1:
+                    self.exception_log.exception(err)
+                    raise HTTPError(403)
+                else:
+                    self.client_socket = ssl_socket
             else:
                 self.client_socket = ssl_socket
-        else:
-            self.client_socket = ssl_socket
-        self.client_socket.settimeout(self.server.config.RECV_TIMEOUT)
+            self.client_socket.settimeout(self.server.config.RECV_TIMEOUT)
 
     def start(self) -> None:
         try:
@@ -69,19 +70,22 @@ class BaseProcessHandler:
             self.response.body.write(b"Internal Server Error")
         finally:
             if self.response:
-                self.access_log.info(
-                    "",
-                    extra={
-                        "host": self.server.client_info[0],
-                        "port": self.server.client_info[1],
-                        "request_id": self.request_id,
-                        "method": self.request_data.method,
-                        "http_version": self.request_data.request_version_num,
-                        "path": self.request_data.original_path or "/",
-                        "status": self.response.status.decode("utf-8"),
-                    },
-                )
+                self.log_access()
             self.finish_response()
+
+    def log_access(self) -> None:
+        self.access_log.info(
+            "",
+            extra={
+                "host": self.server.client_info[0],
+                "port": self.server.client_info[1],
+                "request_id": self.request_id,
+                "method": self.request_data.method,
+                "http_version": self.request_data.request_version_num,
+                "path": self.request_data.original_path or "/",
+                "status": self.response.status.decode("utf-8"),
+            },
+        )
 
     def get_request_data(self) -> None:
         request_data = BytesList()
