@@ -13,7 +13,7 @@ from time import time
 from typing import Callable, Dict, Optional, Tuple
 
 from qactuar.config import Config, config_init
-from qactuar.handlers import HTTPHandler, LifespanHandler, WebSocketHandler
+from qactuar.handlers import LifespanHandler
 from qactuar.logs import QactuarLogger
 from qactuar.models import ASGIApp, Receive, Scope, Send
 from qactuar.processes.admin import make_admin
@@ -85,8 +85,6 @@ class QactuarServer(object):
         self.shutting_down: bool = False
         self.time_last_cleaned_processes: float = time()
         self.lifespan_handler: LifespanHandler = LifespanHandler(self)
-        self.http_handler: HTTPHandler = HTTPHandler(self)
-        self.websocket_handler: WebSocketHandler = WebSocketHandler(self)
         self.apps: Dict[str, ASGIApp] = {"/": app} if app else {}
         for route, app_path in self.config.APPS.items():
             module_str, app_str = app_path.split(":")
@@ -126,9 +124,13 @@ class QactuarServer(object):
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(self.config.SSL_CERT_PATH, self.config.SSL_KEY_PATH)
         context.options |= ssl.PROTOCOL_TLS
-        context.set_ciphers("EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH")
+        context.set_ciphers(self.config.SSL_CIPHERS)
         self.ssl_context = context
         self.scheme = "https"
+        ssl_socket = context.wrap_socket(
+            self.listen_socket, server_side=True, do_handshake_on_connect=False
+        )
+        self.listen_socket = ssl_socket
 
     def send_to_all_apps(self, scope: Scope, receive: Receive, send: Send) -> None:
         for app in self.apps.values():

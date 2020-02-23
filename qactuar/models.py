@@ -1,6 +1,6 @@
 from typing import Any, Awaitable, Callable, List, MutableMapping, Tuple
 
-Headers = List[Tuple[bytes, bytes]]
+BasicHeaders = List[Tuple[bytes, bytes]]
 Scope = MutableMapping[str, Any]
 Message = MutableMapping[str, Any]
 

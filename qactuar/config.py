@@ -26,7 +26,7 @@ def default_log_config() -> Dict[str, Any]:
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
-                "level": "DEBUG",
+                "level": "INFO",
                 "formatter": "standard",
                 "stream": "ext://sys.stdout",
             },
@@ -73,13 +73,14 @@ class Config:
     SELECT_SLEEP_TIME: float = 0.025
     RECV_TIMEOUT: float = 0.001
     RECV_BYTES: int = 65536
-    MAX_PROCESSES: int = 500
-    REQUEST_TIMEOUT: float = 5
+    MAX_PROCESSES: int = 1000
+    REQUEST_TIMEOUT: float = 0.5
     GATHER_PROC_STATS: bool = False
     # see https://psutil.readthedocs.io/en/latest/#process-class for available methods
     PSUTIL_STAT_METHODS: List[str] = field(default_factory=default_psutil_methods)
     SSL_CERT_PATH: str = ""
     SSL_KEY_PATH: str = ""
+    SSL_CIPHERS: str = "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH"
 
     APPS: Dict[str, str] = field(default_factory=dict)
     LOGS: Dict[str, Any] = field(default_factory=default_log_config)

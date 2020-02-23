@@ -2,15 +2,15 @@ import asyncio
 import socket
 import ssl
 import sys
+from io import BytesIO
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from qactuar.exceptions import HTTPError
 from qactuar.request import Request
 from qactuar.response import Response
-from qactuar.util import BytesList
 
 try:
     import psutil  # type: ignore
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 class BaseProcessHandler:
-    def __init__(self, server: "QactuarServer", client_socket: socket.socket):
+    def __init__(self, server: "QactuarServer", client_socket: ssl.SSLSocket):
         self.loop = asyncio.new_event_loop()
         self.server = server
         self.child_log = getLogger("qt_child")
@@ -38,19 +38,12 @@ class BaseProcessHandler:
 
     def setup_ssl(self) -> None:
         if self.server.ssl_context:
-            ssl_socket = self.server.ssl_context.wrap_socket(
-                self.client_socket, server_side=True, do_handshake_on_connect=False
-            )
             try:
-                ssl_socket.do_handshake()
+                self.client_socket.do_handshake()
             except ssl.SSLError as err:
-                if err.args[1].find("sslv3 alert") == -1:
+                if "sslv3 alert" not in err.args[1]:
                     self.exception_log.exception(err)
                     raise HTTPError(403)
-                else:
-                    self.client_socket = ssl_socket
-            else:
-                self.client_socket = ssl_socket
             self.client_socket.settimeout(self.server.config.RECV_TIMEOUT)
 
     def start(self) -> None:
@@ -88,23 +81,24 @@ class BaseProcessHandler:
         )
 
     def get_request_data(self) -> None:
-        request_data = BytesList()
-        request = Request()
-        start = time()
+        with BytesIO() as request_data:
+            request = Request()
+            start = time()
 
-        while True:
-            try:
-                request_data.write(
-                    self.client_socket.recv(self.server.config.RECV_BYTES)
-                )
-            except socket.timeout:
-                if not len(request_data):
+            while True:
+                try:
+                    request_data.write(
+                        self.client_socket.recv(self.server.config.RECV_BYTES)
+                    )
+                except socket.timeout:
+                    pass
+                if not request_data.getvalue():
                     if time() - start > self.server.config.REQUEST_TIMEOUT:
                         self.child_log.debug(
                             "no data received from request, timing out"
                         )
                         break
-                request.raw_request = request_data.read()
+                request.raw_request = request_data.getvalue()
                 if request.headers_complete:
                     content_length = request.headers["content-length"]
                     if content_length is not None and request.method != "GET":
@@ -114,8 +108,8 @@ class BaseProcessHandler:
                             continue
                     break
 
-        self.request_data = request
-        self.raw_request_data = request_data.read()
+            self.request_data = request
+            self.raw_request_data = request_data.getvalue()
 
     def finish_response(self) -> None:
         try:
@@ -124,6 +118,7 @@ class BaseProcessHandler:
                 self.client_socket.sendall(self.response.to_http())
         except OSError as err:
             self.exception_log.exception(err, extra={"request_id": self.request_id})
+        self.response.body.close()
         self.close_socket()
         sys.exit(0)
 

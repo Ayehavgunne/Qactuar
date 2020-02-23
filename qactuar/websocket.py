@@ -1,77 +1,64 @@
 import struct
+from io import BytesIO
 from typing import List, Optional, Union
 
 from qactuar.exceptions import WebSocketError
-from qactuar.util import BytesList, BytesReader
-
-
-def bit_array_to_int(bits: List[int]) -> int:
-    return int(int("".join([str(b) for b in bits]), 2))
-
-
-def bytes_to_bit_array(byte: bytes) -> List[int]:
-    return [int(b) for i in byte for b in bin(i)[2:]]
-
-
-def int_to_bit_array(i: int) -> List[int]:
-    return [int(b) for b in bin(i)[2:]]
-
-
-def bit_array_z_fill(length: int, bit_array: List[int]) -> List[int]:
-    while len(bit_array) < length:
-        bit_array.insert(0, 0)
-    return bit_array
+from qactuar.headers import Headers
 
 
 class Opcodes:
-    CONTINUES = [0, 0, 0, 0]
-    UTF8_TEXT = [0, 0, 0, 1]
-    BINARY = [0, 0, 1, 0]
-    TERMINATE = [1, 0, 0, 0]
-    PING = [1, 0, 0, 1]
-    PONG = [1, 0, 1, 0]
+    CONTINUES = 0x00  # 0
+    UTF8_TEXT = 0x01  # 1
+    BINARY = 0x02  # 10
+    TERMINATE = 0x08  # 1000
+    PING = 0x09  # 1001
+    PONG = 0x0A  # 1010
 
 
 class Frame:
     def __init__(self, data: bytes = None):
-        self._data = data or bytes()
-        self.data_reader = BytesReader(data)
-        self.fin = 0
-        self.rsv1 = 0
-        self.rsv2 = 0
-        self.rsv3 = 0
-        self.opcode = []
-        self.mask = 0
+        self._data = data or b""
+        self.data = BytesIO(self._data)
+        self.fin = False
+        self.rsv1 = False
+        self.rsv2 = False
+        self.rsv3 = False
+        self.opcode = bytes()
+        self.mask = False
         self.payload_len = 0
         self.masking_key = bytes()
         self.payload = bytes()
         if self._data:
-            bits = bytes_to_bit_array(self.data_reader.read(1))
-            self.fin, self.rsv1, self.rsv2, self.rsv3, *self.opcode = bits
-            bits = bytes_to_bit_array(self.data_reader.read(1))
-            self.mask = bits[0]
-            self.payload_len = self.get_payload_len(bits[1:])
+            bits1, bits2 = struct.unpack("!BB", self.data.read(2))
+            self.fin = True if bits1 & 0b10000000 else False
+            self.rsv1 = True if bits1 & 0b01000000 else False
+            self.rsv2 = True if bits1 & 0b00100000 else False
+            self.rsv3 = True if bits1 & 0b00010000 else False
+            self.opcode = bits1 & 0b00001111
+            self.mask = True if bits2 & 0b10000000 else False
+            self.payload_len = self.get_payload_len(bits2 & 0b01111111)
             if self.mask:
-                self.masking_key = self.data_reader.read(4)
-            self.payload = self.data_reader.read(self.payload_len)
-            if self.mask:
-                self.payload = bytes(
-                    [
-                        item ^ self.masking_key[index % 4]
-                        for index, item in enumerate(self.payload)
-                    ]
-                )
+                self.masking_key = self.data.read(4)
+            else:
+                raise WebSocketError("Client messages must be masked")
+            self.payload = self.data.read(self.payload_len)
+            self.data.close()
+            self.payload = bytes(
+                [
+                    item ^ self.masking_key[index % 4]
+                    for index, item in enumerate(self.payload)
+                ]
+            )
 
-    def get_payload_len(self, bits: List[int]) -> int:
-        first_length = bit_array_to_int(bits)
-        if first_length < 126:
-            return first_length
-        elif first_length == 126:
-            return struct.unpack("!H", self.data_reader.read(2))[0]
-        elif first_length == 127:
-            return struct.unpack("!Q", self.data_reader.read(8))[0]
+    def get_payload_len(self, length: int) -> int:
+        if length < 126:
+            return length
+        elif length == 126:
+            return struct.unpack("!H", self.data.read(2))[0]
+        elif length == 127:
+            return struct.unpack("!Q", self.data.read(8))[0]
         else:
-            raise WebSocketError("Payload length is incorrect")
+            raise WebSocketError("Payload length is not valid")
 
     @property
     def message(self) -> Union[str, bytes]:
@@ -92,6 +79,10 @@ class WebSocket:
     def __init__(self) -> None:
         self.read_frames: List[Frame] = []
         self.write_frames: List[bytes] = []
+        self.headers = Headers()
+        self.subprotocols: List[str] = []
+        self.subprotocol = ""
+        self.diconnect_code = 1000
 
     @property
     def is_text(self) -> bool:
@@ -142,56 +133,78 @@ class WebSocket:
             return b"".join(frame.payload for frame in self.read_frames)
         return None
 
+    #    1000
+    #       1000 indicates a normal closure, meaning that the purpose for
+    #       which the connection was established has been fulfilled.
+    #
+    #    1001
+    #       1001 indicates that an endpoint is "going away", such as a server
+    #       going down or a browser having navigated away from a page.
+    #
+    #    1002
+    #       1002 indicates that an endpoint is terminating the connection due
+    #       to a protocol error.
+    #
+    #    1003
+    #       1003 indicates that an endpoint is terminating the connection
+    #       because it has received a type of data it cannot accept (e.g., an
+    #       endpoint that understands only text data MAY send this if it
+    #       receives a binary message).
+
     def write(
         self,
-        message: Union[str, bytes],
+        message: Union[str, bytes] = b"",
         terminate: bool = False,
         ping: bool = False,
         pong: bool = False,
+        close_status_code: int = 1000,
     ) -> List[bytes]:
-        pos = 0
-        chunk_size = 32768
+        chunk_size = int((2 ** 32) / 8)
         frames: List[bytes] = []
+        is_str = False
+        if isinstance(message, str):
+            is_str = True
+            message = message.encode("utf-8")
+        if not message and terminate:
+            message = str(close_status_code).encode("utf-8")
+
         for section in [
             message[i : i + chunk_size] for i in range(0, len(message), chunk_size)
         ]:
             section_len = len(section)
-            if isinstance(message, str):
-                section = section.encode("utf-8")  # type: ignore
-            fin = int(section_len < chunk_size)
-            frame = BytesList()
-            bit_array = [fin, 0, 0, 0]
-            if terminate:
-                bit_array.extend([1, 0, 0, 0])
-            elif ping:
-                bit_array.extend([1, 0, 0, 1])
-            elif pong:
-                bit_array.extend([1, 0, 1, 0])
-            elif isinstance(message, str) and not frames:
-                bit_array.extend([0, 0, 0, 1])
-            elif isinstance(message, bytes) and not frames:
-                bit_array.extend([0, 0, 1, 0])
-            else:
-                bit_array.extend([0, 0, 0, 0])
-            first_bit = bit_array_to_int(bit_array)
-            frame.write(bytes(bytearray([first_bit])))
-            bit_array = [0]
-            if section_len < 126:
-                new_bits = bit_array_z_fill(7, int_to_bit_array(section_len))
-                bit_array.extend(new_bits)
-            elif section_len < 65536:
-                pass  # TODO: write up to 16 bytes of data
-            elif section_len < 9_223_372_036_854_775_808:
-                pass  # TODO: write up to 64 bytes of data
-            else:
-                raise WebSocketError("This shouldn't happen")
-            second_bit = bit_array_to_int(bit_array)
-            frame.write(bytes(bytearray([second_bit])))
-            frame.write(section)  # type: ignore
-            frames.append(frame.read())
-            pos += chunk_size
+            fin = section_len < chunk_size
+            with BytesIO() as frame:
+                bits = 0b00000000
+
+                if fin:
+                    bits |= 0b10000000
+                if terminate:
+                    bits |= 0b00001000
+                elif ping:
+                    bits |= 0b00001001
+                elif pong:
+                    bits |= 0b00001010
+                elif is_str and not frames:
+                    bits |= 0b00000001
+                elif not is_str and not frames:
+                    bits |= 0b00000010
+
+                if section_len < 126:
+                    frame.write(struct.pack("!BB", bits, section_len))
+                elif section_len < 2 ** 16:
+                    frame.write(struct.pack("!BBH", bits, 126, section_len))
+                else:
+                    frame.write(struct.pack("!BBQ", bits, 127, section_len))  # mmm bbq
+
+                frame.write(section)
+                frames.append(frame.getvalue())
         self.write_frames = frames
         return frames
+
+    def pop_write_frame(self, index: int = -1) -> Optional[bytes]:
+        if self.write_frames:
+            return self.write_frames.pop(index)
+        return None
 
     @property
     def response(self) -> Optional[bytes]:

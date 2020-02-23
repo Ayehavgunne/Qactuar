@@ -1,5 +1,5 @@
 import json
-import socket
+import ssl
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
@@ -14,7 +14,7 @@ APPS_PATH = Path(__file__).parent.parent / "apps"  # type: ignore
 
 
 class AdminProcess(BaseProcessHandler):
-    def __init__(self, server: "QactuarServer", admin_socket: socket.socket):
+    def __init__(self, server: "QactuarServer", admin_socket: ssl.SSLSocket):
         super().__init__(server, admin_socket)
 
     def handle_request(self) -> None:
@@ -47,6 +47,6 @@ class AdminProcess(BaseProcessHandler):
         )
 
 
-def make_admin(server: "QactuarServer", admin_socket: socket.socket) -> None:
+def make_admin(server: "QactuarServer", admin_socket: ssl.SSLSocket) -> None:
     admin = AdminProcess(server, admin_socket)
     admin.start()

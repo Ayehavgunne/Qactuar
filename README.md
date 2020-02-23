@@ -198,8 +198,8 @@ This project is licensed under the MIT License - see the
 
 ## TODO
 - Admin socket
-- [UPD](https://channels.readthedocs.io/en/1.x/asgi/udp.html) support
-- WebSockets
+- [UDP](https://channels.readthedocs.io/en/1.x/asgi/udp.html) support
+- TLS session resumption
 - Filter HTTP/2-3 pseudo headers
 - Client streaming
 - Async only model

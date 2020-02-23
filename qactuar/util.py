@@ -1,51 +1,7 @@
-from collections import Iterable as CollectionsInterable
 from logging import Logger, getLogger
-from typing import Any, Callable, Dict, Iterable, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
-from qactuar.models import Headers, Message, Receive, Scope, Send
-
-
-class BytesList:
-    def __init__(self) -> None:
-        self._bytes_list: List[bytes] = []
-
-    def write(self, new_bytes: bytes) -> None:
-        self._bytes_list.append(new_bytes)
-
-    def writelines(self, *bytes_list: Union[bytes, Iterable[bytes]]) -> None:
-        if len(bytes_list) == 1:
-            if isinstance(bytes_list[0], CollectionsInterable):
-                bytes_list = bytes_list[0]  # type: ignore
-        self._bytes_list.extend(bytes_list)  # type: ignore
-
-    def read(self) -> bytes:
-        return b"".join(self._bytes_list)
-
-    def readlines(self) -> List[bytes]:
-        return self._bytes_list
-
-    def clear(self) -> None:
-        self._bytes_list = []
-
-    def __contains__(self, item: bytes) -> bool:
-        return item in self.read()
-
-    def __len__(self) -> int:
-        return len(self.read())
-
-    def __bool__(self) -> bool:
-        return len(self) > 0
-
-
-class BytesReader:
-    def __init__(self, data: bytes = None):
-        self.data = data or bytes()
-        self.pos = 0
-
-    def read(self, length: int) -> bytes:
-        data = self.data[self.pos : self.pos + length]
-        self.pos += length
-        return data
+from qactuar.models import BasicHeaders, Message, Receive, Scope, Send
 
 
 def to_bytes(value: Any) -> bytes:
@@ -141,7 +97,7 @@ else:
                 ) -> None:
                     super().__init__(tornado_application, tornado_request, **kwargs)
                     inner_self._qactuar_body: List[bytes] = []
-                    inner_self._qactuar_headers: Headers = []
+                    inner_self._qactuar_headers: BasicHeaders = []
                     inner_self._logger = logger
 
                 def write(inner_self, chunk: Union[str, bytes, dict]) -> None:

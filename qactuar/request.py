@@ -1,9 +1,9 @@
 import urllib.parse
+from io import BytesIO
 from typing import List, Tuple
 
-from qactuar.header import Header
-from qactuar.models import Headers
-from qactuar.util import BytesList
+from qactuar.headers import Headers
+from qactuar.models import BasicHeaders
 
 
 class Request:
@@ -15,8 +15,8 @@ class Request:
         self._original_path: str = ""
         self._raw_path: bytes = b""
         self._query_string: bytes = b""
-        self._headers: Headers = []
-        self._parsed_headers: Header = Header()
+        self._headers: BasicHeaders = []
+        self._parsed_headers: Headers = Headers()
         self._body: bytes = b""
         self.headers_complete = False
         if request:
@@ -47,14 +47,14 @@ class Request:
             line_num += 1
             key, value = line.split(b": ", 1)
             self._headers.append((key.lower(), value))
-        self._parsed_headers = Header(self._headers)
+        self._parsed_headers = Headers(self._headers)
 
-        body = BytesList()
-        body.writelines(lines[line_num:])
-        self._body = body.read()
+        with BytesIO() as body:
+            body.writelines(lines[line_num:])
+            self._body = body.getvalue()
 
     @property
-    def headers(self) -> Header:
+    def headers(self) -> Headers:
         return self._parsed_headers
 
     @property
@@ -117,6 +117,6 @@ class Request:
         self._raw_path = b""
         self._query_string = b""
         self._headers = []
-        self._parsed_headers = Header()
+        self._parsed_headers = Headers()
         self._body = b""
         self.headers_complete = False
