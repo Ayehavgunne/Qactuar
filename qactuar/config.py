@@ -70,10 +70,10 @@ class Config:
     ADMIN_HOST: str = "localhost"
     ADMIN_PORT: int = 1986
     CHECK_PROCESS_INTERVAL: int = 1
-    SELECT_SLEEP_TIME: float = 0.025
-    RECV_TIMEOUT: float = 0.001
+    SELECT_SLEEP_TIME: float = 0.00001
+    RECV_TIMEOUT: float = 0.01
     RECV_BYTES: int = 65536
-    MAX_PROCESSES: int = 1000
+    MAX_PROCESSES: int = 5000
     REQUEST_TIMEOUT: float = 0.5
     GATHER_PROC_STATS: bool = False
     # see https://psutil.readthedocs.io/en/latest/#process-class for available methods

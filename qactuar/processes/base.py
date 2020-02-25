@@ -118,7 +118,6 @@ class BaseProcessHandler:
                 self.client_socket.sendall(self.response.to_http())
         except OSError as err:
             self.exception_log.exception(err, extra={"request_id": self.request_id})
-        self.response.body.close()
         self.close_socket()
         sys.exit(0)
 

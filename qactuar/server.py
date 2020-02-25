@@ -80,11 +80,9 @@ class QactuarServer(object):
         self.server_port: int = self.port
 
         self.client_info: Tuple[str, int] = ("", 0)
-        self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.processes: Dict[int, multiprocessing.Process] = {}
         self.shutting_down: bool = False
         self.time_last_cleaned_processes: float = time()
-        self.lifespan_handler: LifespanHandler = LifespanHandler(self)
         self.apps: Dict[str, ASGIApp] = {"/": app} if app else {}
         for route, app_path in self.config.APPS.items():
             module_str, app_str = app_path.split(":")
@@ -101,10 +99,11 @@ class QactuarServer(object):
         self.apps[route] = application
 
     def start_up(self) -> None:
+        lifespan_handler = LifespanHandler(self)
         self.send_to_all_apps(
-            self.lifespan_handler.create_scope(),
-            self.lifespan_handler.receive,
-            self.lifespan_handler.send,
+            lifespan_handler.create_scope(),
+            lifespan_handler.receive,
+            lifespan_handler.send,
         )
         self.server_log.info(
             f"Qactuar: Serving {self.scheme.upper()} on {self.host}:{self.port}"
@@ -113,10 +112,11 @@ class QactuarServer(object):
     def shut_down(self) -> None:
         self.shutting_down = True
         self.server_log.info("Shutting Down")
+        lifespan_handler = LifespanHandler(self)
         self.send_to_all_apps(
-            self.lifespan_handler.create_scope(),
-            self.lifespan_handler.receive,
-            self.lifespan_handler.send,
+            lifespan_handler.create_scope(),
+            lifespan_handler.receive,
+            lifespan_handler.send,
         )
         sys.exit(0)
 
@@ -133,8 +133,9 @@ class QactuarServer(object):
         self.listen_socket = ssl_socket
 
     def send_to_all_apps(self, scope: Scope, receive: Receive, send: Send) -> None:
+        loop = asyncio.get_event_loop()
         for app in self.apps.values():
-            self.loop.run_until_complete(app(scope, receive, send))
+            loop.run_until_complete(app(scope, receive, send))
 
     def serve_forever(self) -> None:
         try:
@@ -151,11 +152,11 @@ class QactuarServer(object):
     def select_socket(
         self, listening_socket: socket.socket, process_handler: Callable
     ) -> None:
-        ready_to_read, _, _ = select.select(
+        ready_to_reads, _, _ = select.select(
             [listening_socket], [], [], self.config.SELECT_SLEEP_TIME
         )
-        if ready_to_read:
-            accepted_socket = self.accept_client_connection(listening_socket)
+        for ready_to_read in ready_to_reads:
+            accepted_socket = self.accept_client_connection(ready_to_read)
             if accepted_socket:
                 self.fork(accepted_socket, process_handler)
 
@@ -175,7 +176,6 @@ class QactuarServer(object):
         process = multiprocessing.Process(
             target=process_handler, args=(self, client_socket)
         )
-        process.daemon = True
         try:
             process.start()
         except AttributeError as err:
