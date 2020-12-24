@@ -1,12 +1,14 @@
+__version__ = "0.1.0"
+
 from qactuar.config import Config
 from qactuar.models import ASGIApp
-from qactuar.server import QactuarServer
+from qactuar.servers.simple_fork import SimpleForkServer
 
 
 def make_server(
     host: str = None, port: int = None, app: ASGIApp = None, conf: Config = None,
-) -> QactuarServer:
-    qactuar_server = QactuarServer(host, port, app, conf)
+) -> SimpleForkServer:
+    qactuar_server = SimpleForkServer(host, port, app, conf)
     return qactuar_server
 
 

@@ -3,18 +3,17 @@ from hashlib import sha1
 from typing import TYPE_CHECKING, Optional
 
 from qactuar.models import Message, Scope
-from qactuar.processes.child import ChildProcess
-from qactuar.websocket import WebSocket
+from qactuar.processes.simple_child import ChildProcess
 
 if TYPE_CHECKING:
-    from qactuar import QactuarServer
+    from qactuar.servers.base import BaseQactuarServer
 
 ASGI_VERSION = {"version": "2.0", "spec_version": "2.0"}
 MAGIC_STRING = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 class Handler:
-    def __init__(self, server: "QactuarServer"):
+    def __init__(self, server: "BaseQactuarServer"):
         self.server = server
         self.child: Optional[ChildProcess] = None
 

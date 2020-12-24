@@ -1,20 +1,7 @@
 # Qactuar <img src="https://raw.githubusercontent.com/Ayehavgunne/Qactuar/master/Qactuar.png" width="100" title="Qactuar">
 
-An ASGI compliant web server the goal of which is to support multiple
-asynchronous models. This started as a companion project to the
+An ASGI compliant web server which started as a companion project to the
 [Tonberry](https://github.com/Ayehavgunne/Tonberry) ASGI framework.
-
-##### 1. Post-Fork Multiprocessing
-The first strategy is a post-fork model creating a new process for every 
-request. This is the only model available right now.
-
-##### 2. Async/Await
-The second strategy is one that a lot of current ASGI servers already do. In a
-single process just handle requests using asyncio/uvloop.
-
-##### 3. Pre-Fork Multiprocessing with Async/Await
-Start up a pool of processes which can share a socket and each take a set number
-of requests and then handle them internally with async.
 
 ## Installing
 Just do the usual
@@ -23,14 +10,14 @@ $ pip install qactuar
 ```
 
 ## Usage
-During the install it creates a command line app.
+During the installation it creates a command line app.
 
 ### Command Line
 ```bash
 $ qactuar module:app
 ```
 If your module is in the python path then it will get imported and any ASGI
-compatible object in the module can be called. If the apps are setup in the
+compatible object in the module can be called. If the apps are set up in the
 config (see Configuration section below) then you can just start up qactuar
 without any arguments.
 ```bash
@@ -67,8 +54,6 @@ provided.
 
 - HOST: `str` = "localhost"
 - PORT: `int` = 8000
-- ADMIN_HOST: `str` = "localhost"
-- ADMIN_PORT: `int` = 1986
 - CHECK_PROCESS_INTERVAL: `int` = 1
 - SELECT_SLEEP_TIME: `float` = 0.025
 - RECV_TIMEOUT: `float` = 0.001
@@ -171,12 +156,6 @@ with ASGI. See
 [tornado_app.py](https://github.com/Ayehavgunne/Qactuar/blob/develop/tests/tornado_app.py)
 for an example.
 
-## Admin
-The plan is to support an extra socket connection that can accept connections
-for adminitrative purposes. Maybe for viewing system recources, viewing the
-processes and current load, changing configs on the fly, installing new apps
-via git clone without restarting the server. This is still in the works.
-
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of
@@ -203,6 +182,5 @@ This project is licensed under the MIT License - see the
 - Filter HTTP/2-3 pseudo headers
 - Client streaming
 - Async only model
-- Pre-Fork model
 - TESTS!!!
 - Docs

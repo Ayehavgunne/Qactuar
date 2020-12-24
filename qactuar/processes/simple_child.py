@@ -1,4 +1,3 @@
-import multiprocessing
 import socket
 from logging import getLogger
 from random import randint
@@ -10,19 +9,13 @@ from qactuar.processes.base import BaseProcessHandler
 from qactuar.util import BytesList
 from qactuar.websocket import Frame, WebSocket
 
-try:
-    import psutil  # type: ignore
-except ImportError:
-    psutil = None
-
 if TYPE_CHECKING:
-    from qactuar import QactuarServer, ASGIApp
+    from qactuar.servers.base import ASGIApp, BaseQactuarServer
 
 
 class ChildProcess(BaseProcessHandler):
-    def __init__(self, server: "QactuarServer", client_socket: socket.socket):
+    def __init__(self, server: "BaseQactuarServer", client_socket: socket.socket):
         super().__init__(server, client_socket)
-        del self.server.admin_queue
         self.server.http_handler.set_child(self)
         self.stats_log = getLogger("qt_stats")
         self.closing = False
@@ -80,21 +73,7 @@ class ChildProcess(BaseProcessHandler):
             self.send_to_app()
         except HTTPError:
             pass
-        self.get_proc_stats()
         super().close_socket()
-
-    def get_proc_stats(self) -> None:
-        if self.server.config.GATHER_PROC_STATS and psutil is not None:
-            try:
-                pid = multiprocessing.current_process().pid
-                proc_stats = psutil.Process(pid=pid)
-                stats = {}
-                for key in self.server.config.PSUTIL_STAT_METHODS:
-                    stats[key] = getattr(proc_stats, key)()
-                self.stats_log.info(stats)
-
-            except Exception as err:
-                self.exception_log.exception(err, extra={"request_id": self.request_id})
 
     def start_websocket(self) -> None:
         websocket = WebSocket()
@@ -155,6 +134,6 @@ class ChildProcess(BaseProcessHandler):
         return frame
 
 
-def make_child(server: "QactuarServer", client_socket: socket.socket) -> None:
+def make_child(server: "BaseQactuarServer", client_socket: socket.socket) -> None:
     child = ChildProcess(server, client_socket)
     child.start()

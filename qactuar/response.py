@@ -4,7 +4,7 @@ from email.utils import formatdate
 from time import mktime
 from typing import Union
 
-from qactuar.__version__ import VERSION
+from qactuar import __version__
 from qactuar.models import Headers
 from qactuar.util import BytesList
 
@@ -18,7 +18,7 @@ class Response:
     def to_http(self) -> bytes:
         headers = [
             (b"Date", formatdate(mktime(datetime.now().timetuple())).encode("utf-8")),
-            (b"Server", b"Qactuar " + VERSION.encode("utf-8")),
+            (b"Server", b"Qactuar " + __version__.encode("utf-8")),
         ] + self.headers
         response = BytesList()
         response.writelines(b"HTTP/1.1 ", self.status, b"\r\n")

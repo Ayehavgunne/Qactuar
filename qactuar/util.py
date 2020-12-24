@@ -69,8 +69,8 @@ else:
 
     from tornado.http1connection import HTTP1Connection  # type: ignore
     from tornado.httputil import (  # type: ignore
-        HTTPServerRequest,
         HTTPHeaders,
+        HTTPServerRequest,
         RequestStartLine,
     )
     from tornado.iostream import BaseIOStream  # type: ignore
