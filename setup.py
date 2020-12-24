@@ -1,13 +1,21 @@
-from qactuar.__version__ import VERSION
+from pathlib import Path
 from setuptools import find_packages, setup
 
-with open("README.md", "r") as fh:
+PROJECT_ROOT = Path(__file__).parent
+
+with (PROJECT_ROOT / "qactuar" / "__init__.py").open("r") as fh:
+    for line in fh.readlines():
+        if line.startswith('__version__ = '):
+            VERSION = line.split('=')[1].strip().replace('"', '')
+            break
+
+with (PROJECT_ROOT / "README.md").open("r") as fh:
     long_description = fh.read()
 
-with open("requirements.txt", "r") as fh:
+with (PROJECT_ROOT / "requirements.txt").open("r") as fh:
     requirements = fh.readlines()
 
-with open("dev_requirements.txt", "r") as fh:
+with (PROJECT_ROOT / "dev_requirements.txt").open("r") as fh:
     dev_requirements = fh.readlines()
 
 setup(

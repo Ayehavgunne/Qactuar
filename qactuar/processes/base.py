@@ -4,7 +4,7 @@ import ssl
 import sys
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from qactuar.exceptions import HTTPError
@@ -12,17 +12,12 @@ from qactuar.request import Request
 from qactuar.response import Response
 from qactuar.util import BytesList
 
-try:
-    import psutil  # type: ignore
-except ImportError:
-    psutil = None
-
 if TYPE_CHECKING:
-    from qactuar import QactuarServer
+    from qactuar.servers.base import BaseQactuarServer
 
 
 class BaseProcessHandler:
-    def __init__(self, server: "QactuarServer", client_socket: socket.socket):
+    def __init__(self, server: "BaseQactuarServer", client_socket: socket.socket):
         self.loop = asyncio.new_event_loop()
         self.server = server
         self.child_log = getLogger("qt_child")

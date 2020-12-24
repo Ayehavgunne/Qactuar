@@ -1,5 +1,6 @@
-from tonberry import File, create_app, expose
+from tonberry import create_app, expose
 from tonberry.content_types import TextHTML, TextPlain
+from tonberry.util import File
 
 
 class Root:

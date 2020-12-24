@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def default_log_config() -> Dict[str, Any]:
@@ -21,7 +21,6 @@ def default_log_config() -> Dict[str, Any]:
                 "format": "{asctime} {levelname} {request_id} {message}",
                 "style": "{",
             },
-            "stats": {"format": "{message}", "style": "{"},
         },
         "handlers": {
             "console": {
@@ -42,19 +41,12 @@ def default_log_config() -> Dict[str, Any]:
                 "formatter": "exception",
                 "stream": "ext://sys.stderr",
             },
-            "stats": {
-                "class": "logging.StreamHandler",
-                "level": "INFO",
-                "formatter": "stats",
-                "stream": "ext://sys.stdout",
-            },
         },
         "loggers": {
             "qt_server": {"handlers": ["console"], "level": "DEBUG"},
             "qt_child": {"handlers": ["console"], "level": "DEBUG"},
             "qt_access": {"handlers": ["access"], "level": "INFO"},
             "qt_exception": {"handlers": ["exception"], "level": "ERROR"},
-            "qt_stats": {"handlers": ["stats"], "level": "INFO"},
         },
     }
 
@@ -67,17 +59,13 @@ def default_psutil_methods() -> List[str]:
 class Config:
     HOST: str = "localhost"
     PORT: int = 8000
-    ADMIN_HOST: str = "localhost"
-    ADMIN_PORT: int = 1986
     CHECK_PROCESS_INTERVAL: int = 1
     SELECT_SLEEP_TIME: float = 0.025
     RECV_TIMEOUT: float = 0.001
     RECV_BYTES: int = 65536
     MAX_PROCESSES: int = 500
+    PROCESS_POOL_SIZE: Optional[int] = os.cpu_count()
     REQUEST_TIMEOUT: float = 5
-    GATHER_PROC_STATS: bool = False
-    # see https://psutil.readthedocs.io/en/latest/#process-class for available methods
-    PSUTIL_STAT_METHODS: List[str] = field(default_factory=default_psutil_methods)
     SSL_CERT_PATH: str = ""
     SSL_KEY_PATH: str = ""
 
