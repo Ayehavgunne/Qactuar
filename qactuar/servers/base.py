@@ -8,7 +8,6 @@ import sys
 from importlib import import_module
 from logging import Logger, getLogger, setLoggerClass
 from logging.config import dictConfig
-from time import time
 from typing import Dict, Optional, Tuple
 
 from qactuar.config import Config, config_init
@@ -67,7 +66,6 @@ class BaseQactuarServer(object):
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.processes: Dict[int, multiprocessing.Process] = {}
         self.shutting_down: bool = False
-        self.time_last_cleaned_processes: float = time()
         self.lifespan_handler: LifespanHandler = LifespanHandler(self)
         self.http_handler: HTTPHandler = HTTPHandler(self)
         self.websocket_handler: WebSocketHandler = WebSocketHandler(self)

@@ -4,11 +4,22 @@ import socket
 from time import time
 from typing import Callable
 
+from qactuar import ASGIApp, Config
 from qactuar.processes.simple_child import make_child
 from qactuar.servers.base import BaseQactuarServer
 
 
 class SimpleForkServer(BaseQactuarServer):
+    def __init__(
+        self,
+        host: str = None,
+        port: int = None,
+        app: ASGIApp = None,
+        config: Config = None,
+    ):
+        self.time_last_cleaned_processes: float = time()
+        super().__init__(host, port, app, config)
+
     def serve_forever(self) -> None:
         try:
             while True:
