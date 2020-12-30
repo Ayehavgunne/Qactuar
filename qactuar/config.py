@@ -13,8 +13,7 @@ def default_log_config() -> Dict[str, Any]:
         "formatters": {
             "standard": {"format": "{asctime} {levelname} {message}", "style": "{"},
             "access": {
-                "format": "{asctime} ACCESS pid:{pid} {host}:{port} {request_id} "
-                "{method} "
+                "format": "{asctime} ACCESS {host}:{port} {request_id} {method} "
                 "HTTP/{http_version} {path} {status} {message}",
                 "style": "{",
             },

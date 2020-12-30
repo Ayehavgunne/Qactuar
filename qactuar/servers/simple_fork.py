@@ -1,7 +1,9 @@
+import errno
 import multiprocessing
 import select
 import socket
 from time import time
+from typing import Optional
 
 from qactuar import ASGIApp, Config
 from qactuar.processes.simple_fork import make_child

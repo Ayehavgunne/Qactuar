@@ -1,5 +1,4 @@
 import asyncio
-import os
 import socket
 import ssl
 from logging import getLogger
@@ -58,9 +57,7 @@ class BaseProcessHandler:
                     client_socket = ssl_socket
             else:
                 client_socket = ssl_socket
-            client_socket.settimeout(self.server.config.RECV_TIMEOUT)
-        else:
-            client_socket.settimeout(self.server.config.RECV_TIMEOUT)
+        client_socket.settimeout(self.server.config.RECV_TIMEOUT)
         return client_socket
 
     def log_access(self, request: Request, response: Response) -> None:
@@ -69,7 +66,6 @@ class BaseProcessHandler:
             extra={
                 "host": self.server.client_info[0],
                 "port": self.server.client_info[1],
-                "pid": os.getpid(),
                 "request_id": request.request_id,
                 "method": request.method,
                 "http_version": request.request_version_num,
@@ -91,9 +87,11 @@ class BaseProcessHandler:
             ):
                 websocket_handler = WebSocketHandler(self.server, request)
                 websocket_handler.ws_shake_hand()
-                client_socket.sendall(http_handler.response.to_http())
+                await self.loop.sock_sendall(
+                    client_socket, http_handler.response.to_http()
+                )
                 self.log_access(request, http_handler.response)
-                self.start_websocket(client_socket, http_handler)
+                await self.start_websocket(client_socket, http_handler)
                 http_handler.response.clear()
                 return
             await self.send_to_app(http_handler)
@@ -116,7 +114,10 @@ class BaseProcessHandler:
 
         while True:
             try:
-                request_data.write(client_socket.recv(self.server.config.RECV_BYTES))
+                data = await self.loop.sock_recv(
+                    client_socket, self.server.config.RECV_BYTES
+                )
+                request_data.write(data)
             except socket.timeout:
                 if not len(request_data):
                     if time() - start > self.server.config.REQUEST_TIMEOUT:
@@ -144,41 +145,41 @@ class BaseProcessHandler:
             http_handler.send,
         )
 
-    def start_websocket(
+    async def start_websocket(
         self, client_socket: socket.socket, http_handler: HTTPHandler
     ) -> None:
         websocket = WebSocket()
-        frame = self.get_websocket_frame(client_socket)
+        frame = await self.get_websocket_frame(client_socket)
         websocket.add_read_frame(frame)
         while True:
-            self.websocket_read(websocket, client_socket)
+            await self.websocket_read(websocket, client_socket)
             if websocket.should_terminate:
-                self.close_socket(client_socket, http_handler)
+                await self.close_socket(client_socket, http_handler)
                 break
             if websocket.being_pinged:
                 message = websocket.read()
                 websocket.write(message or "", pong=True)
                 response = websocket.response
                 if response:
-                    client_socket.sendall(response)
+                    await self.loop.sock_sendall(client_socket, response)
             if randint(0, 1):
                 websocket.clear_frames()
                 websocket.write("ping", ping=True)
                 response = websocket.response
                 if response:
-                    client_socket.sendall(response)
-                frame = self.get_websocket_frame(client_socket)
+                    await self.loop.sock_sendall(client_socket, response)
+                frame = await self.get_websocket_frame(client_socket)
                 if frame.is_pong and frame.message == "ping":
                     print("ponged")
                 else:
                     print(frame.message)
             websocket.clear_frames()
 
-    def websocket_read(
+    async def websocket_read(
         self, websocket: WebSocket, client_socket: socket.socket
     ) -> None:
         while not websocket.reading_complete:
-            frame = self.get_websocket_frame(client_socket)
+            frame = await self.get_websocket_frame(client_socket)
             websocket.add_read_frame(frame)
         message = websocket.read()
         if message:  # TODO: send message to app and send app responses back
@@ -187,16 +188,19 @@ class BaseProcessHandler:
             try:
                 response = websocket.response
                 if response:
-                    client_socket.sendall(response)
+                    await self.loop.sock_sendall(client_socket, response)
             except OSError as err:
                 self.exception_log.exception(err)
 
-    def get_websocket_frame(self, client_socket: socket.socket) -> Frame:
+    async def get_websocket_frame(self, client_socket: socket.socket) -> Frame:
         request_data = BytesList()
 
         while True:
             try:
-                request_data.write(client_socket.recv(self.server.config.RECV_BYTES))
+                data = await self.loop.sock_recv(
+                    client_socket, self.server.config.RECV_BYTES
+                )
+                request_data.write(data)
             except socket.timeout:
                 pass
             frame = Frame(request_data.read())
@@ -212,7 +216,9 @@ class BaseProcessHandler:
                 http_handler.response.add_header(
                     "x-request-id", http_handler.request.request_id
                 )
-                client_socket.sendall(http_handler.response.to_http())
+                await self.loop.sock_sendall(
+                    client_socket, http_handler.response.to_http()
+                )
         except OSError as err:
             self.exception_log.exception(
                 err, extra={"request_id": http_handler.request.request_id}

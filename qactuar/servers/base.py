@@ -99,6 +99,16 @@ class BaseQactuarServer(object):
         )
         sys.exit(0)
 
+    async def async_shut_down(self) -> None:
+        self.shutting_down = True
+        self.server_log.info("Shutting Down")
+        await self.async_send_to_all_apps(
+            self.lifespan_handler.create_scope(),
+            self.lifespan_handler.receive,
+            self.lifespan_handler.send,
+        )
+        sys.exit(0)
+
     def setup_ssl(self) -> None:
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(self.config.SSL_CERT_PATH, self.config.SSL_KEY_PATH)
@@ -111,9 +121,27 @@ class BaseQactuarServer(object):
         for app in self.apps.values():
             self.loop.run_until_complete(app(scope, receive, send))
 
+    async def async_send_to_all_apps(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        for app in self.apps.values():
+            await app(scope, receive, send)
+
     def accept_client_connection(self) -> Optional[socket.socket]:
         try:
             client_socket, self.client_info = self.listen_socket.accept()
+        except IOError as err:
+            if err.args[0] != errno.EINTR:
+                raise
+            return None
+        else:
+            return client_socket
+
+    async def async_accept_client_connection(self) -> Optional[socket.socket]:
+        try:
+            client_socket, self.client_info = await self.loop.sock_accept(
+                self.listen_socket
+            )
         except IOError as err:
             if err.args[0] != errno.EINTR:
                 raise

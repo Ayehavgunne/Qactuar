@@ -11,7 +11,7 @@ THREADS = []
 
 def connect(num, host, port, path):
     response = requests.post(
-        f"http://{host}:{port}{path}", data={"thing": "stuff", "num": num}
+        f"http://{host}:{port}{path}", data={"thing": "stuff", "num": LOREM_IPSUM}
     )
     elapsed = response.elapsed
     ELAPSEDES.append(elapsed.microseconds)
@@ -88,11 +88,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-conns",
         type=int,
-        default=1000,
+        default=5000,
         help="Maximum number of connections per client.",
     )
     parser.add_argument(
-        "--max-clients", type=int, default=10, help="Maximum number of clients."
+        "--max-clients", type=int, default=1, help="Maximum number of clients."
     )
     parser.add_argument(
         "--host",

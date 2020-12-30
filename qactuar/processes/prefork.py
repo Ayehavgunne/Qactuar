@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING
 from qactuar.processes.base import BaseProcessHandler
 
 if TYPE_CHECKING:
-    from qactuar.servers.base import BaseQactuarServer
+    from qactuar.servers.prefork import PreForkServer
 
 
 class PreForkChild(BaseProcessHandler):
-    def __init__(self, server: "BaseQactuarServer", queue: Queue):
+    def __init__(self, server: "PreForkServer", queue: Queue):
         super().__init__(server)
+        self.server = server
         self.queue = queue
 
     async def start(self) -> None:
@@ -22,13 +23,13 @@ class PreForkChild(BaseProcessHandler):
                 pass
             else:
                 if ready:
-                    client_socket = self.server.accept_client_connection()
+                    client_socket = await self.server.async_accept_client_connection()
                     if client_socket:
                         client_socket = self.setup_ssl(client_socket)
                         await self.handle_request(client_socket)
 
 
-def make_child(server: "BaseQactuarServer", queue: Queue) -> None:
+def make_child(server: "PreForkServer", queue: Queue) -> None:
     child = PreForkChild(server, queue)
     try:
         child.loop.run_until_complete(child.start())
