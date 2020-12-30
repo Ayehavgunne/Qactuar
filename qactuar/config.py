@@ -63,6 +63,7 @@ class Config:
     REQUEST_TIMEOUT: float = 5
     SSL_CERT_PATH: str = ""
     SSL_KEY_PATH: str = ""
+    SSL_CIPHERS: str = "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH"
 
     APPS: Dict[str, str] = field(default_factory=dict)
     LOGS: Dict[str, Any] = field(default_factory=default_log_config)

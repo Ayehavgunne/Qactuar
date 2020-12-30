@@ -113,9 +113,12 @@ class BaseQactuarServer(object):
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(self.config.SSL_CERT_PATH, self.config.SSL_KEY_PATH)
         context.options |= ssl.PROTOCOL_TLS
-        context.set_ciphers("EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH")
+        context.set_ciphers(self.config.SSL_CIPHERS)
         self.ssl_context = context
         self.scheme = "https"
+        self.listen_socket = context.wrap_socket(
+            self.listen_socket, server_side=True, do_handshake_on_connect=False
+        )
 
     def send_to_all_apps(self, scope: Scope, receive: Receive, send: Send) -> None:
         for app in self.apps.values():
