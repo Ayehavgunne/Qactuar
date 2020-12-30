@@ -1,4 +1,5 @@
 {
+  "SERVER_TYPE": "prefork",
   "APPS": {
     "/tonberry": "tests.tonberry_app:app",
     "/tornado": "tests.tornado_app:app",

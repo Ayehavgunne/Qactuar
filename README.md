@@ -1,4 +1,4 @@
-# Qactuar <img src="https://raw.githubusercontent.com/Ayehavgunne/Qactuar/master/Qactuar.png" width="100" title="Qactuar">
+# Qactuar <img src="https://raw.githubusercontent.com/Ayehavgunne/Qactuar/master/Qactuar.png" width="100" title="Qactuar Logo">
 
 An ASGI compliant web server which started as a companion project to the
 [Tonberry](https://github.com/Ayehavgunne/Tonberry) ASGI framework.
@@ -46,24 +46,25 @@ For a nice ASGI framework, check out
 [Tonberry](https://github.com/Ayehavgunne/Tonberry)!
 
 ## Configuration
-File and programatic based configurations are supported. For a config file just
-create an environment variable `QACTUAR_CONFIG` and set the value to the
+File, command line and programatic based configurations are supported. For a config 
+file just create an environment variable `QACTUAR_CONFIG` and set the value to the
 absolute or relative path of a JSON file. This file can overwride any of the
 default values listed here. Only the values you wish to override need to be
 provided.
 
-- HOST: `str` = "localhost"
-- PORT: `int` = 8000
-- CHECK_PROCESS_INTERVAL: `int` = 1
+- HOST: `str` = "127.0.0.1"
+- PORT: `int` = 8000 
+- SERVER_TYPE: `str` = "async_only" | "prefork" | "simple_fork"
 - SELECT_SLEEP_TIME: `float` = 0.025
 - RECV_TIMEOUT: `float` = 0.001
 - RECV_BYTES: `int` = 65536
-- MAX_PROCESSES: `int` = 500
+- PROCESS_POOL_SIZE: `int` = os.cpu_count()
 - REQUEST_TIMEOUT: `float` = 5
-- GATHER_PROC_STATS: `bool` = False
-- PSUTIL_STAT_METHODS: List[str] = ["cpu_times", "io_counters", "memory_info"]
 - SSL_CERT_PATH: `str` = ""
 - SSL_KEY_PATH: `str` = ""
+- SSL_CIPHERS: `str` = "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH"
+- APP_DIR: `str` = "."
+- USE_UVLOOP: `bool` = True
 - APPS: `Dict[str, str]` = {}
 - LOGS: `Dict[str, Any]` = *default_log_setup (see below)*
 
@@ -94,12 +95,13 @@ in the child processes), `qt_access` (used to log each request), `qt_exception`
     "version": 1,
     "disable_existing_loggers": false,
     "formatters": {
-        "standard": {
-            "format": "{asctime} {levelname} {message}",
+        "standard": {"format": "{asctime} {levelname} {message}", "style": "{"},
+        "access": {
+            "format": "{asctime} ACCESS {host}:{port} {request_id} {method} HTTP/{http_version} {path} {status} {message}",
             "style": "{"
         },
-        "access": {
-            "format": "{asctime} ACCESS {message}",
+        "exception": {
+            "format": "{asctime} {levelname} {request_id} {message}",
             "style": "{"
         }
     },
@@ -119,36 +121,20 @@ in the child processes), `qt_access` (used to log each request), `qt_exception`
         "exception": {
             "class": "logging.StreamHandler",
             "level": "ERROR",
-            "formatter": "standard",
+            "formatter": "exception",
             "stream": "ext://sys.stderr"
         }
     },
     "loggers": {
-        "qt_server": {
-            "handlers": ["console"],
-            "level": "DEBUG"
-        },
-        "qt_child": {
-            "handlers": ["console"],
-            "level": "DEBUG"
-        },
-        "qt_access": {
-            "handlers": ["access"],
-            "level": "INFO"
-        },
-        "qt_exception": {
-            "handlers": ["exception"],
-            "level": "ERROR"
-        }
+        "qt_server": {"handlers": ["console"], "level": "DEBUG"},
+        "qt_child": {"handlers": ["console"], "level": "DEBUG"},
+        "qt_access": {"handlers": ["access"], "level": "INFO"},
+        "qt_exception": {"handlers": ["exception"], "level": "ERROR"}
     }
 }
 ```
 If changing the `LOGS` config then the whole dictionary needs to be replaced.
 Individual parts of the log config cannot be changed by themselves.
-
-### Future Config Options
-
-- ASYNCRONOUS_MODEL: `Enum` = 1
 
 ## Tornado Apps
 Included is a utility wrapper to take a Tornado Request Handler and make it work
@@ -176,11 +162,9 @@ This project is licensed under the MIT License - see the
 [LICENSE.txt](LICENSE.txt) file for details
 
 ## TODO
-- Admin socket
 - [UPD](https://channels.readthedocs.io/en/1.x/asgi/udp.html) support
 - WebSockets
 - Filter HTTP/2-3 pseudo headers
 - Client streaming
-- Async only model
 - TESTS!!!
 - Docs

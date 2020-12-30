@@ -1,9 +1,7 @@
-import errno
 import multiprocessing
 import select
 import socket
 from time import time
-from typing import Optional
 
 from qactuar import ASGIApp, Config
 from qactuar.processes.simple_fork import make_child
@@ -58,7 +56,7 @@ class SimpleForkServer(BaseQactuarServer):
     def check_processes(self) -> None:
         current_time = time()
         last_time = self.time_last_cleaned_processes
-        if current_time - last_time > self.config.CHECK_PROCESS_INTERVAL:
+        if current_time - last_time > 1:
             self.time_last_cleaned_processes = current_time
             for ident, process in list(self.processes.items()):
                 if not process.is_alive():

@@ -53,9 +53,9 @@ def default_log_config() -> Dict[str, Any]:
 
 @dataclass
 class Config:
-    HOST: str = "localhost"
+    HOST: str = "127.0.0.1"
     PORT: int = 8000
-    CHECK_PROCESS_INTERVAL: int = 1
+    SERVER_TYPE: str = "async_only"
     SELECT_SLEEP_TIME: float = 0.025
     RECV_TIMEOUT: float = 0.001
     RECV_BYTES: int = 65536
@@ -64,6 +64,8 @@ class Config:
     SSL_CERT_PATH: str = ""
     SSL_KEY_PATH: str = ""
     SSL_CIPHERS: str = "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH"
+    APP_DIR: str = "."
+    USE_UVLOOP: bool = True
 
     APPS: Dict[str, str] = field(default_factory=dict)
     LOGS: Dict[str, Any] = field(default_factory=default_log_config)

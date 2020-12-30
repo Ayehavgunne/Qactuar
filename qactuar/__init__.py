@@ -1,6 +1,6 @@
 __version__ = "0.1.0"
 
-from qactuar.config import Config
+from qactuar.config import Config, config_init
 from qactuar.models import ASGIApp
 from qactuar.servers.async_only import AsyncOnlyServer
 from qactuar.servers.base import BaseQactuarServer
@@ -13,16 +13,17 @@ def make_server(
     port: int = None,
     app: ASGIApp = None,
     conf: Config = None,
-    server_type: str = "async_only",
 ) -> BaseQactuarServer:
-    if server_type.lower() == "simple_fork":
+    if conf is None:
+        conf = config_init()
+    if conf.SERVER_TYPE.lower() == "simple_fork":
         return SimpleForkServer(host, port, app, conf)
-    elif server_type.lower() == "prefork":
+    elif conf.SERVER_TYPE.lower() == "prefork":
         return PreForkServer(host, port, app, conf)
-    elif server_type.lower() == "async_only":
+    elif conf.SERVER_TYPE.lower() == "async_only":
         return AsyncOnlyServer(host, port, app, conf)
     else:
-        raise ValueError(f"server_type parameter not recognised: {server_type}")
+        raise ValueError(f"server_type parameter not recognised: {conf.SERVER_TYPE}")
 
 
 def run(
