@@ -4,7 +4,7 @@ import socket
 from time import time
 
 from qactuar import ASGIApp, Config
-from qactuar.processes.simple_child import make_child
+from qactuar.processes.simple_fork import make_child
 from qactuar.servers.base import BaseQactuarServer
 
 

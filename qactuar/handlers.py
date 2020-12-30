@@ -14,9 +14,9 @@ MAGIC_STRING = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 class Handler:
-    def __init__(self, server: "BaseQactuarServer"):
+    def __init__(self, server: "BaseQactuarServer", request: Request = None):
         self.server = server
-        self._request: Request = Request()
+        self._request: Request = request or Request()
         self._response: Response = Response(request=self._request)
         self.closing = False
 

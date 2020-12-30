@@ -88,11 +88,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-conns",
         type=int,
-        default=100,
+        default=1000,
         help="Maximum number of connections per client.",
     )
     parser.add_argument(
-        "--max-clients", type=int, default=1, help="Maximum number of clients."
+        "--max-clients", type=int, default=10, help="Maximum number of clients."
     )
     parser.add_argument(
         "--host",

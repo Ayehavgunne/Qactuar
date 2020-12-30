@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 
 def default_log_config() -> Dict[str, Any]:
@@ -13,7 +13,8 @@ def default_log_config() -> Dict[str, Any]:
         "formatters": {
             "standard": {"format": "{asctime} {levelname} {message}", "style": "{"},
             "access": {
-                "format": "{asctime} ACCESS {host}:{port} {request_id} {method} "
+                "format": "{asctime} ACCESS pid:{pid} {host}:{port} {request_id} "
+                "{method} "
                 "HTTP/{http_version} {path} {status} {message}",
                 "style": "{",
             },
@@ -51,10 +52,6 @@ def default_log_config() -> Dict[str, Any]:
     }
 
 
-def default_psutil_methods() -> List[str]:
-    return ["cpu_times", "io_counters", "memory_info"]
-
-
 @dataclass
 class Config:
     HOST: str = "localhost"
@@ -63,8 +60,7 @@ class Config:
     SELECT_SLEEP_TIME: float = 0.025
     RECV_TIMEOUT: float = 0.001
     RECV_BYTES: int = 65536
-    MAX_PROCESSES: int = 500
-    PROCESS_POOL_SIZE: Optional[int] = os.cpu_count()
+    PROCESS_POOL_SIZE: int = os.cpu_count() or 1
     REQUEST_TIMEOUT: float = 5
     SSL_CERT_PATH: str = ""
     SSL_KEY_PATH: str = ""
