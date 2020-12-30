@@ -1,4 +1,3 @@
-import asyncio
 import socket
 import ssl
 from io import BytesIO
@@ -11,7 +10,7 @@ from qactuar.exceptions import HTTPError, WebSocketError
 from qactuar.handlers import HTTPHandler, WebSocketHandler, WebSocketState
 from qactuar.request import Request
 from qactuar.response import Response
-from qactuar.util import BytesList
+from qactuar.util import BytesList, create_event_loop
 from qactuar.websocket import Frame, WebSocket
 
 if TYPE_CHECKING:
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
 
 class BaseProcessHandler:
     def __init__(self, server: "BaseQactuarServer"):
-        self.loop = asyncio.new_event_loop()
+        self.loop = create_event_loop(server.config.USE_UVLOOP)
         self.server = server
         self.child_log = getLogger("qt_child")
         self._access_log = getLogger("qt_access")

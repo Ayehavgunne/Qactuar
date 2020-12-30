@@ -1,8 +1,24 @@
+import asyncio
 from collections import Iterable as CollectionsInterable
 from logging import Logger, getLogger
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 from qactuar.models import Headers, Message, Receive, Scope, Send
+
+try:
+    import uvloop
+
+    def create_event_loop(use_uvloop: bool = True) -> asyncio.AbstractEventLoop:
+        if use_uvloop:
+            return uvloop.new_event_loop()
+        else:
+            return asyncio.new_event_loop()
+
+
+except ImportError:
+
+    def create_event_loop(use_uvloop: bool = True) -> asyncio.AbstractEventLoop:
+        return asyncio.new_event_loop()
 
 
 class BytesList:

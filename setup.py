@@ -19,6 +19,9 @@ with (PROJECT_ROOT / "requirements.txt").open("r") as fh:
 with (PROJECT_ROOT / "dev_requirements.txt").open("r") as fh:
     dev_requirements = fh.readlines()
 
+with (PROJECT_ROOT / "extra_requirements.txt").open("r") as fh:
+    extra_requirements = fh.readlines()
+
 setup(
     name="Qactuar",
     version=VERSION,
@@ -31,7 +34,7 @@ setup(
     url="https://github.com/Ayehavgunne/Qactuar/",
     packages=find_packages(),
     install_requires=requirements,
-    extras_require={"dev": dev_requirements},
+    extras_require={"dev": dev_requirements, "extra": extra_requirements},
     python_requires=">=3.7",
     entry_points={"console_scripts": ["qactuar=qactuar.__main__:main"]},
 )

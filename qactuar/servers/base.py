@@ -63,7 +63,7 @@ class BaseQactuarServer(object):
         self.server_port: int = self.port
 
         self.client_info: Tuple[str, int] = ("", 0)
-        self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+        self.loop = asyncio.get_event_loop()
         self.processes: Dict[int, multiprocessing.Process] = {}
         self.shutting_down: bool = False
         self.lifespan_handler: LifespanHandler = LifespanHandler(self)
