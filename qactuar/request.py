@@ -1,5 +1,6 @@
 import urllib.parse
 from typing import List, Tuple
+from uuid import uuid4
 
 from qactuar.header import Header
 from qactuar.models import Headers
@@ -19,6 +20,7 @@ class Request:
         self._parsed_headers: Header = Header()
         self._body: bytes = b""
         self.headers_complete = False
+        self.request_id: str = str(uuid4())
         if request:
             self.parse()
 

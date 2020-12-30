@@ -4,8 +4,7 @@ import ssl
 import sys
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING
-from uuid import uuid4
+from typing import TYPE_CHECKING, Optional
 
 from qactuar.exceptions import HTTPError
 from qactuar.request import Request
@@ -13,28 +12,43 @@ from qactuar.response import Response
 from qactuar.util import BytesList
 
 if TYPE_CHECKING:
+    from qactuar import ASGIApp
     from qactuar.servers.base import BaseQactuarServer
 
 
 class BaseProcessHandler:
-    def __init__(self, server: "BaseQactuarServer", client_socket: socket.socket):
+    def __init__(self, server: "BaseQactuarServer"):
         self.loop = asyncio.new_event_loop()
         self.server = server
+        self._app: Optional["ASGIApp"] = None
         self.child_log = getLogger("qt_child")
         self.access_log = getLogger("qt_access")
         self.exception_log = getLogger("qt_exception")
-        self.client_socket = client_socket
-        self.response: Response = Response()
-        self.raw_request_data: bytes = b""
-        self.request_data: Request = Request()
-        self.request_id: str = str(uuid4())
-        if self.server.ssl_context is None:
-            client_socket.settimeout(server.config.RECV_TIMEOUT)
 
-    def setup_ssl(self) -> None:
+    def get_app(self, request: Request) -> "ASGIApp":
+        if self._app is None:
+            current_path = request.path
+            for route, app in self.server.apps.items():
+                if route == "/":
+                    if current_path == route:
+                        self._app = app
+                        return app
+                elif current_path.startswith(route):
+                    request.path = current_path.replace(route, "")
+                    self._app = app
+                    return app
+            try:
+                app = self.server.apps["/"]
+            except KeyError:
+                raise HTTPError(404)
+            else:
+                self._app = app
+        return self._app
+
+    def setup_ssl(self, client_socket: socket.socket) -> socket.socket:
         if self.server.ssl_context:
             ssl_socket = self.server.ssl_context.wrap_socket(
-                self.client_socket, server_side=True, do_handshake_on_connect=False
+                client_socket, server_side=True, do_handshake_on_connect=False
             )
             try:
                 ssl_socket.do_handshake()
@@ -43,55 +57,34 @@ class BaseProcessHandler:
                     self.exception_log.exception(err)
                     raise HTTPError(403)
                 else:
-                    self.client_socket = ssl_socket
+                    client_socket = ssl_socket
             else:
-                self.client_socket = ssl_socket
-            self.client_socket.settimeout(self.server.config.RECV_TIMEOUT)
+                client_socket = ssl_socket
+            client_socket.settimeout(self.server.config.RECV_TIMEOUT)
+        return client_socket
 
-    def start(self) -> None:
-        try:
-            if self.server.ssl_context is not None:
-                self.setup_ssl()
-            self.get_request_data()
-            self.handle_request()
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except HTTPError as err:
-            self.response.status = str(err.args[0]).encode("utf-8")
-            self.response.body.write(str(err.args[0]).encode("utf-8"))
-        except Exception as err:
-            self.exception_log.exception(err, extra={"request_id": self.request_id})
-            self.response.status = b"500"
-            self.response.body.write(b"Internal Server Error")
-        finally:
-            if self.response:
-                self.log_access()
-            self.finish_response()
-
-    def log_access(self) -> None:
+    def log_access(self, request: Request, response: Response) -> None:
         self.access_log.info(
             "",
             extra={
                 "host": self.server.client_info[0],
                 "port": self.server.client_info[1],
-                "request_id": self.request_id,
-                "method": self.request_data.method,
-                "http_version": self.request_data.request_version_num,
-                "path": self.request_data.original_path or "/",
-                "status": self.response.status.decode("utf-8"),
+                "request_id": request.request_id,
+                "method": request.method,
+                "http_version": request.request_version_num,
+                "path": request.original_path or "/",
+                "status": response.status.decode("utf-8"),
             },
         )
 
-    def get_request_data(self) -> None:
+    def get_request_data(self, client_socket: socket.socket) -> Request:
         request_data = BytesList()
         request = Request()
         start = time()
 
         while True:
             try:
-                request_data.write(
-                    self.client_socket.recv(self.server.config.RECV_BYTES)
-                )
+                request_data.write(client_socket.recv(self.server.config.RECV_BYTES))
             except socket.timeout:
                 if not len(request_data):
                     if time() - start > self.server.config.REQUEST_TIMEOUT:
@@ -99,35 +92,44 @@ class BaseProcessHandler:
                             "no data received from request, timing out"
                         )
                         break
-                request.raw_request = request_data.read()
-                if request.headers_complete:
-                    content_length = request.headers["content-length"]
-                    if content_length is not None and request.method != "GET":
-                        if len(request.body) == int(content_length):
-                            break
-                        else:
-                            continue
-                    break
+            request.raw_request = request_data.read()
+            if request.headers_complete:
+                content_length = request.headers["content-length"]
+                if content_length is not None and request.method != "GET":
+                    if len(request.body) == int(content_length):
+                        break
+                    else:
+                        continue
+                break
 
-        self.request_data = request
-        self.raw_request_data = request_data.read()
+        return request
 
-    def finish_response(self) -> None:
+    def finish_response(self, client_socket: socket.socket, response: Response) -> None:
         try:
-            if self.response:
-                self.response.add_header("x-request-id", self.request_id)
-                self.client_socket.sendall(self.response.to_http())
+            if response:
+                response.add_header("x-request-id", response.request.request_id)
+                client_socket.sendall(response.to_http())
         except OSError as err:
-            self.exception_log.exception(err, extra={"request_id": self.request_id})
-        self.close_socket()
+            self.exception_log.exception(
+                err, extra={"request_id": response.request.request_id}
+            )
+        self.close_socket(client_socket, response.request)
         sys.exit(0)
 
-    def close_socket(self) -> None:
+    def close_socket(self, client_socket: socket.socket, request: Request) -> None:
         try:
-            self.client_socket.shutdown(socket.SHUT_RDWR)
+            client_socket.shutdown(socket.SHUT_RDWR)
         except OSError:
             pass
-        self.client_socket.close()
+        client_socket.close()
 
-    def handle_request(self) -> None:
+    def start(self) -> None:
+        raise NotImplementedError
+
+    def handle_request(
+        self, client_socket: socket.socket, request: Request
+    ) -> Response:
+        raise NotImplementedError
+
+    def send_to_app(self, request: Request) -> Response:
         raise NotImplementedError

@@ -11,7 +11,7 @@ from logging.config import dictConfig
 from typing import Dict, Optional, Tuple
 
 from qactuar.config import Config, config_init
-from qactuar.handlers import HTTPHandler, LifespanHandler, WebSocketHandler
+from qactuar.handlers import LifespanHandler
 from qactuar.logs import QactuarLogger
 from qactuar.models import ASGIApp, Receive, Scope, Send
 
@@ -67,19 +67,11 @@ class BaseQactuarServer(object):
         self.processes: Dict[int, multiprocessing.Process] = {}
         self.shutting_down: bool = False
         self.lifespan_handler: LifespanHandler = LifespanHandler(self)
-        self.http_handler: HTTPHandler = HTTPHandler(self)
-        self.websocket_handler: WebSocketHandler = WebSocketHandler(self)
         self.apps: Dict[str, ASGIApp] = {"/": app} if app else {}
         for route, app_path in self.config.APPS.items():
             module_str, app_str = app_path.split(":")
             app_module = import_module(module_str)
             self.apps[route] = getattr(app_module, app_str)
-        if self.apps:
-            self.start_up()
-            self.serve_forever()
-        else:
-            self.server_log.error("No apps found")
-            self.shut_down()
 
     def serve_forever(self) -> None:
         raise NotImplementedError
@@ -119,14 +111,12 @@ class BaseQactuarServer(object):
         for app in self.apps.values():
             self.loop.run_until_complete(app(scope, receive, send))
 
-    def accept_client_connection(
-        self, listening_socket: socket.socket
-    ) -> Optional[socket.socket]:
+    def accept_client_connection(self) -> Optional[socket.socket]:
         try:
-            client_socket, self.client_info = listening_socket.accept()
+            client_socket, self.client_info = self.listen_socket.accept()
         except IOError as err:
             if err.args[0] != errno.EINTR:
                 raise
-            return None  # for mypy
+            return None
         else:
             return client_socket

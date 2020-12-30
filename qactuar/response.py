@@ -6,6 +6,7 @@ from typing import Union
 
 from qactuar import __version__
 from qactuar.models import Headers
+from qactuar.request import Request
 from qactuar.util import BytesList
 
 
@@ -14,6 +15,7 @@ class Response:
     status: bytes = b"200"
     headers: Headers = field(default_factory=list)
     body: BytesList = field(default_factory=BytesList)
+    request: Request = field(default_factory=Request)
 
     def to_http(self) -> bytes:
         headers = [
