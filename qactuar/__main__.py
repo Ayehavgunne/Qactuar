@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument(
         "app_path",
         type=str,
-        help="path to module with app and variable of initialised app seperated by a "
+        help="path to a module and variable of an initialised app seperated by a "
         "colon; example -> module:app",
     )
     parser.add_argument(
@@ -76,7 +76,7 @@ def main() -> None:
         dest="PROCESS_POOL_SIZE",
         default=default_config.PROCESS_POOL_SIZE,
         help="PRE-FORK MODE ONLY - How many processes to start up. Recomended size is "
-        "equal to the number of cpu cores. defaults to os.cpu_count()",
+        "equal to the number of cpu cores; defaults to os.cpu_count()",
     )
     parser.add_argument(
         "--request-timeout",
