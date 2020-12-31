@@ -41,7 +41,7 @@ def main() -> None:
     parser.add_argument(
         "-s",
         "--server-type",
-        type=int,
+        type=str,
         dest="SERVER_TYPE",
         default=default_config.SERVER_TYPE,
         help="Option to set the server concurrency model to async_only, simple_fork or "
