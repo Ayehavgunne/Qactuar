@@ -136,7 +136,7 @@ def main() -> None:
 
     args = parser.parse_args()
     app_path = args.app_path
-    sys.path.insert(0, ".")
+    sys.path.insert(0, args.APP_DIR)
     args_dict = args.__dict__.copy()
     del args_dict["app_path"]
     config = qactuar.Config(**args_dict)
