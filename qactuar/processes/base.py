@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 class BaseProcessHandler:
     def __init__(self, server: "BaseQactuarServer"):
-        self.loop = create_event_loop(server.config.USE_UVLOOP)
+        self.loop = create_event_loop(
+            server.config.USE_UVLOOP, server.config.SERVER_TYPE == "async_only"
+        )
         self.server = server
         self.child_log = getLogger("qt_child")
         self._access_log = getLogger("qt_access")

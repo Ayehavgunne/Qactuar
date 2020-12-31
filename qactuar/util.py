@@ -8,7 +8,11 @@ from qactuar.models import Headers, Message, Receive, Scope, Send
 try:
     import uvloop
 
-    def create_event_loop(use_uvloop: bool = True) -> asyncio.AbstractEventLoop:
+    def create_event_loop(
+        use_uvloop: bool = True, async_only: bool = False
+    ) -> asyncio.AbstractEventLoop:
+        if async_only:
+            return asyncio.get_event_loop()
         if use_uvloop:
             return uvloop.new_event_loop()
         else:
@@ -17,7 +21,11 @@ try:
 
 except ImportError:
 
-    def create_event_loop(use_uvloop: bool = True) -> asyncio.AbstractEventLoop:
+    def create_event_loop(
+        use_uvloop: bool = True, async_only: bool = False
+    ) -> asyncio.AbstractEventLoop:
+        if async_only:
+            return asyncio.get_event_loop()
         return asyncio.new_event_loop()
 
 

@@ -32,9 +32,10 @@ class BaseQactuarServer(object):
     ):
         if os.name != "nt":
             multiprocessing.set_start_method("fork")
-            self.is_posix = False
-        else:
             self.is_posix = True
+        else:
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            self.is_posix = False
 
         self.config: Config = config or config_init()
 
