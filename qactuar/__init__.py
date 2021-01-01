@@ -1,4 +1,4 @@
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from qactuar.config import Config, config_init
 from qactuar.models import ASGIApp
