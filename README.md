@@ -180,7 +180,7 @@ be changed by themselves.
 
 ## Tornado Apps
 Included is a utility wrapper to take a Tornado Request Handler and make it work with ASGI. See
-[tornado_app.py](https://github.com/Ayehavgunne/Qactuar/blob/develop/tests/tornado_app.py) for an example.
+[tornado_app.py](https://github.com/Ayehavgunne/Qactuar/blob/master/tests/tornado_app.py) for an example.
 
 ## Contributing
 
