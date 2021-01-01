@@ -17,6 +17,10 @@ def default_log_config() -> Dict[str, Any]:
                 "HTTP/{http_version} {path} {status} {message}",
                 "style": "{",
             },
+            "exception": {
+                "format": "{asctime} {levelname} {request_id} {message}",
+                "style": "{",
+            },
         },
         "handlers": {
             "console": {
@@ -34,7 +38,7 @@ def default_log_config() -> Dict[str, Any]:
             "exception": {
                 "class": "logging.StreamHandler",
                 "level": "ERROR",
-                "formatter": "standard",
+                "formatter": "exception",
                 "stream": "ext://sys.stderr",
             },
         },
@@ -49,17 +53,20 @@ def default_log_config() -> Dict[str, Any]:
 
 @dataclass
 class Config:
-    HOST: str = "localhost"
+    HOST: str = "127.0.0.1"
     PORT: int = 8000
-    ADMIN_HOST: str = "localhost"
-    ADMIN_PORT: int = 1986
-    CHECK_PROCESS_INTERVAL: int = 1
+    SERVER_TYPE: str = "async_only"
     SELECT_SLEEP_TIME: float = 0.025
     RECV_TIMEOUT: float = 0.001
     RECV_BYTES: int = 65536
-    MAX_PROCESSES: int = 500
-    GATHER_PROC_STATS: bool = False
+    PROCESS_POOL_SIZE: int = os.cpu_count() or 1
     REQUEST_TIMEOUT: float = 5
+    SSL_CERT_PATH: str = ""
+    SSL_KEY_PATH: str = ""
+    SSL_CIPHERS: str = "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH"
+    APP_DIR: str = "."
+    USE_UVLOOP: bool = True
+
     APPS: Dict[str, str] = field(default_factory=dict)
     LOGS: Dict[str, Any] = field(default_factory=default_log_config)
 

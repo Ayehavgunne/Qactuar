@@ -11,7 +11,7 @@ THREADS = []
 
 def connect(num, host, port, path):
     response = requests.post(
-        f"http://{host}:{port}{path}", data={"thing": LOREM_IPSUM, "num": num}
+        f"http://{host}:{port}{path}", data={"thing": "stuff", "num": LOREM_IPSUM}
     )
     elapsed = response.elapsed
     ELAPSEDES.append(elapsed.microseconds)
@@ -24,7 +24,9 @@ def start(max_clients, max_conns, host, port, path):
     start_time = time()
     for client_num in range(max_clients):
         for connection_num in range(max_conns):
-            t = threading.Thread(target=connect, args=(client_num, host, port, path))
+            t = threading.Thread(
+                target=connect, args=(connection_num, host, port, path)
+            )
             t.daemon = True
             THREADS.append(t)
     for thread in THREADS:
@@ -86,20 +88,29 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-conns",
         type=int,
-        default=1,
+        default=5000,
         help="Maximum number of connections per client.",
     )
     parser.add_argument(
         "--max-clients", type=int, default=1, help="Maximum number of clients."
     )
     parser.add_argument(
-        "--host", type=str, default="localhost", help="Host to connect to",
+        "--host",
+        type=str,
+        default="localhost",
+        help="Host to connect to",
     )
     parser.add_argument(
-        "--port", type=int, default=8000, help="Port to connect to",
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to connect to",
     )
     parser.add_argument(
-        "--path", type=str, default="/tonberry/what", help="URL path to connect access",
+        "--path",
+        type=str,
+        default="/tonberry/what",
+        help="URL path to connect access",
     )
     args = parser.parse_args()
     start(args.max_clients, args.max_conns, args.host, args.port, args.path)
