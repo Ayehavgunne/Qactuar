@@ -1,0 +1,52 @@
+<html>
+    <head>
+        <style>
+            body {
+                background-color: #292929;
+                color:white;
+            }
+        </style>
+        <script>
+            let socket = new WebSocket("ws://localhost:8000/tonberry/ws_test");
+            let count = 0;
+
+            socket.onopen = function (e) {
+                socket.send("My name is Anthony");
+            };
+
+            socket.onmessage = function (event) {
+                count += 1;
+                setTimeout(
+                    function(){
+                        if (count > 10) {
+                            socket.close();
+                        }
+                        else {
+                            socket.send(`${event.data} ${count}`)
+                        }
+                    },
+                    1000
+                );
+
+            };
+
+            socket.onclose = function (event) {
+                if (event.wasClean) {
+                    console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+                }
+                else {
+                    // e.g. server process killed or network down
+                    // event.code is usually 1006 in this case
+                    console.log('[close] Connection died');
+                }
+            };
+
+            socket.onerror = function (error) {
+                console.log(`[error] ${error.message}`);
+            };
+        </script>
+    </head>
+    <body>
+        <div>websocket test</div>
+    </body>
+</html>

@@ -1,9 +1,32 @@
+import asyncio
 from collections import Iterable as CollectionsInterable
-from dataclasses import dataclass
 from logging import Logger, getLogger
-from typing import Any, Dict, Iterable, List, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
-from qactuar.models import Headers, Receive, Scope, Send
+from qactuar.models import Headers, Message, Receive, Scope, Send
+
+try:
+    import uvloop
+
+    def create_event_loop(
+        use_uvloop: bool = True, async_only: bool = False
+    ) -> asyncio.AbstractEventLoop:
+        if async_only:
+            return asyncio.get_event_loop()
+        if use_uvloop:
+            return uvloop.new_event_loop()
+        else:
+            return asyncio.new_event_loop()
+
+
+except ImportError:
+
+    def create_event_loop(
+        use_uvloop: bool = True, async_only: bool = False
+    ) -> asyncio.AbstractEventLoop:
+        if async_only:
+            return asyncio.get_event_loop()
+        return asyncio.new_event_loop()
 
 
 class BytesList:
@@ -38,103 +61,27 @@ class BytesList:
         return len(self) > 0
 
 
+class BytesReader:
+    def __init__(self, data: bytes = None):
+        self.data = data or bytes()
+        self.pos = 0
+
+    def read(self, length: int) -> bytes:
+        data = self.data[self.pos : self.pos + length]
+        self.pos += length
+        return data
+
+
 def to_bytes(value: Any) -> bytes:
     if isinstance(value, bytes):
         return value
     return str(value).encode("utf-8")
 
 
-@dataclass
-class ProcStat:
-    minor_faults: int = 0
-    major_faults: int = 0
-    user_time: int = 0
-    system_time: int = 0
-    virtual_size: int = 0
-    resident_set_size: int = 0
-
-
-@dataclass
-class IoStat:
-    read_char: int = 0
-    write_char: int = 0
-    read_bytes: int = 0
-    write_bytes: int = 0
-
-
-@dataclass
-class MemStat:
-    file_desc_size: int = 0
-    vm_peak: int = 0
-    vm_size: int = 0
-    vm_highwm: int = 0
-    vm_rss: int = 0
-    vm_data: int = 0
-    vm_lib: int = 0
-    vm_pte: int = 0
-    threads: int = 0
-
-
-def parse_proc_stat(stat_line: str) -> ProcStat:
-    parts = stat_line.split(" ")
-    return ProcStat(
-        minor_faults=int(parts[9]),
-        major_faults=int(parts[11]),
-        user_time=int(parts[13]),
-        system_time=int(parts[14]),
-        virtual_size=int(parts[22]),
-        resident_set_size=int(parts[23]),
-    )
-
-
-io_stat_map = {
-    "rchar": "read_char",
-    "wchar": "write_char",
-    "read_bytes": "read_bytes",
-    "write_bytes": "write_bytes",
-}
-
-
-def parse_proc_io(io_line: str) -> IoStat:
-    io_stat = IoStat()
-
-    parts = io_line.split("\n")
-    for part in parts:
-        stat_parts = part.split(": ")
-        if len(stat_parts) == 2:
-            key, value = stat_parts
-            if key in io_stat_map:
-                setattr(io_stat, io_stat_map[key], int(value))
-
-    return io_stat
-
-
-mem_stat_map = {
-    "FDSize": "file_desc_size",
-    "VmPeak": "vm_peak",
-    "VmSize": "vm_size",
-    "VmHWM": "vm_highwm",
-    "VmRSS": "vm_rss",
-    "VmData": "vm_data",
-    "VmLib": "vm_lib",
-    "VmPTE": "vm_pte",
-    "Threads": "threads",
-}
-
-
-def parse_proc_mem(mem_line: str) -> MemStat:
-    mem_stat = MemStat()
-
-    parts = mem_line.split("\n")
-    for part in parts:
-        stat_parts = part.split(":\t")
-        if len(stat_parts) == 2:
-            key, value = stat_parts
-            if key in mem_stat_map:
-                value = value.replace("kB", "")
-                setattr(mem_stat, mem_stat_map[key], int(value))
-
-    return mem_stat
+def to_str(value: Any) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return str(value)
 
 
 try:
@@ -146,8 +93,8 @@ else:
 
     from tornado.http1connection import HTTP1Connection  # type: ignore
     from tornado.httputil import (  # type: ignore
-        HTTPServerRequest,
         HTTPHeaders,
+        HTTPServerRequest,
         RequestStartLine,
     )
     from tornado.iostream import BaseIOStream  # type: ignore
@@ -185,12 +132,28 @@ else:
         handler to get to the response data to send to the ASGI server.
         """
 
-        def __init__(self, tornado_handler: Type[RequestHandler]) -> None:
+        def __init__(
+            self,
+            tornado_handler: Type[RequestHandler],
+            startup_tasks: List[Callable] = None,
+            shutdown_tasks: List[Callable] = None,
+        ) -> None:
             self.child_log = getLogger("qt_child")
-            self.access_log = getLogger("qt_access")
+            self.exception_log = getLogger("qt_exception")
             self.handler_type = tornado_handler
+            self.startup_tasks = startup_tasks or []
+            self.shutdown_tasks = shutdown_tasks or []
+            self.request_message: Optional[Message] = None
 
         async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            self.request_message = await receive()
+
+            if scope["type"] == "http":
+                await self.handle_http(scope, send)
+            if scope["type"] == "lifespan":
+                await self.handle_lifespan(send)
+
+        def create_qactuar_handler(self, scope: Scope) -> RequestHandler:
             # noinspection PyAbstractClass,PyMethodParameters
             class QactuarHandler(self.handler_type):  # type: ignore
                 def __init__(
@@ -221,62 +184,102 @@ else:
                         (to_bytes(name), to_bytes(value))
                     )
 
-            if scope["type"] == "http":
-                received = await receive()
-                body = received["body"]
-                headers = HTTPHeaders(
-                    {
-                        header[0].decode("utf-8"): header[1].decode("utf-8")
-                        for header in scope["headers"]
-                    }
-                )
-                request_start_line = RequestStartLine(
-                    scope["method"], scope["path"], scope["http_version"]
-                )
-                # noinspection PyTypeChecker
-                http_connection = HTTP1Connection(QactuarStream(), False)
-                http_connection._request_start_line = request_start_line
-                http_connection._request_headers = headers
-                request = HTTPServerRequest(
-                    method=scope["method"],
-                    uri=scope["path"],
-                    version=scope["http_version"],
-                    headers=headers,
-                    body=body,
-                    host=scope["server"][0],
-                    connection=http_connection,
-                    start_line=request_start_line,
-                )
-                handler = QactuarHandler(Application(), request, self.child_log)
-                handler._transforms = []
-                handler.application.transforms = []
-                method_map = {
-                    "GET": handler.get,
-                    "POST": handler.post,
-                    "PUT": handler.put,
-                    "DELETE": handler.delete,
-                    "OPTION": handler.options,
-                    "HEAD": handler.head,
-                    "PATCH": handler.patch,
+            if self.request_message and "body" in self.request_message:
+                body = self.request_message["body"]
+            else:
+                body = b""
+            if self.request_message and "headers" in self.request_message:
+                headers = scope["headers"]
+            else:
+                headers = []
+            headers = HTTPHeaders(
+                {
+                    header[0].decode("utf-8"): header[1].decode("utf-8")
+                    for header in headers
                 }
-                try:
-                    method = method_map[scope["method"]]
-                    await method()
-                except Exception as err:
-                    self.access_log.exception(err)
-                    result = b"500 Server Error"
-                    handler.set_status(500)
-                else:
-                    result = b"".join(handler._qactuar_body)
-                status = str(handler.get_status())
-                response_headers = handler._qactuar_headers
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": status,
-                        "headers": response_headers,
-                    }
-                )
-                await send(
-                    {"type": "http.response.body", "body": result, "more_body": False}
-                )
+            )
+            request_start_line = RequestStartLine(
+                scope["method"], scope["path"], scope["http_version"]
+            )
+
+            # noinspection PyTypeChecker
+            http_connection = HTTP1Connection(QactuarStream(), False)
+            http_connection._request_start_line = request_start_line
+            http_connection._request_headers = headers
+
+            request = HTTPServerRequest(
+                method=scope["method"],
+                uri=scope["path"],
+                version=scope["http_version"],
+                headers=headers,
+                body=body,
+                host=scope["server"][0],
+                connection=http_connection,
+                start_line=request_start_line,
+            )
+
+            handler = QactuarHandler(Application(), request, self.child_log)
+            handler._transforms = []
+            handler.application.transforms = []
+
+            return handler
+
+        async def handle_http(self, scope: Scope, send: Send) -> None:
+            handler = self.create_qactuar_handler(scope)
+            method_map = {
+                "GET": handler.get,
+                "POST": handler.post,
+                "PUT": handler.put,
+                "DELETE": handler.delete,
+                "OPTION": handler.options,
+                "HEAD": handler.head,
+                "PATCH": handler.patch,
+            }
+            try:
+                method = method_map[scope["method"]]
+                await method()
+            except Exception as err:
+                self.child_log.error(err)
+                self.exception_log.exception(err)
+                result = b"500 Server Error"
+                handler.set_status(500)
+            else:
+                # noinspection PyUnresolvedReferences
+                result = b"".join(handler._qactuar_body)
+            status = str(handler.get_status())
+            # noinspection PyUnresolvedReferences
+            response_headers = handler._qactuar_headers
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": status,
+                    "headers": response_headers,
+                }
+            )
+            await send(
+                {"type": "http.response.body", "body": result, "more_body": False}
+            )
+
+        async def handle_lifespan(self, send: Send) -> None:
+            if self.request_message:
+                if self.request_message["type"] == "lifespan.startup":
+                    for task in self.startup_tasks:
+                        try:
+                            task()
+                        except Exception as err:
+                            await send(
+                                {"type": "lifespan.startup.failed", "message": str(err)}
+                            )
+                    await send({"type": "lifespan.startup.complete"})
+                elif self.request_message["type"] == "lifespan.shutdown":
+                    for task in self.shutdown_tasks:
+                        try:
+                            task()
+                        except Exception as err:
+                            await send(
+                                {
+                                    "type": "lifespan.shutdown.failed",
+                                    "message": str(err),
+                                }
+                            )
+                    await send({"type": "lifespan.shutdown.complete"})
