@@ -36,6 +36,8 @@ class BaseProcessHandler:
                     return app
             elif current_path.startswith(route):
                 request.path = current_path.replace(route, "")
+                if request.path == "":
+                    request.path = "/"
                 return app
         try:
             app = self.server.apps["/"]

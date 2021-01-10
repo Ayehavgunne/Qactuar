@@ -33,4 +33,4 @@ def run(
     conf: Config = None,
 ) -> None:
     qactuar_server = make_server(host, port, app, conf)
-    qactuar_server.serve_forever()
+    qactuar_server.loop.run_until_complete(qactuar_server.serve_forever())

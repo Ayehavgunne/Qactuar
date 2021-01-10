@@ -11,10 +11,12 @@
             let count = 0;
 
             socket.onopen = function (e) {
+                console.log('[open]')
                 socket.send("My name is Anthony");
             };
 
             socket.onmessage = function (event) {
+                console.log(`[onmessage] ${event.data}`)
                 count += 1;
                 setTimeout(
                     function(){
@@ -37,7 +39,7 @@
                 else {
                     // e.g. server process killed or network down
                     // event.code is usually 1006 in this case
-                    console.log('[close] Connection died');
+                    console.log(`[close] Connection died, code=${event.code} reason=${event.reason}`);
                 }
             };
 

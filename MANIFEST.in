@@ -2,3 +2,4 @@ recursive-include qactuar *.py
 recursive-exclude tests *
 include requirements.txt
 include dev_requirements.txt
+include extra_requirements.txt

@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from multiprocessing.queues import Queue
 from queue import Empty
@@ -20,10 +21,10 @@ class PreForkChild(BaseProcessHandler):
             try:
                 ready = self.queue.get(timeout=0.001)
             except Empty:
-                pass
+                await asyncio.sleep(0.01)
             else:
                 if ready:
-                    client_socket = await self.server.async_accept_client_connection()
+                    client_socket = await self.server.accept_client_connection()
                     if client_socket:
                         client_socket = self.setup_ssl(client_socket)
                         await self.handle_request(client_socket)

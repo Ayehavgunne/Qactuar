@@ -1,5 +1,4 @@
 import multiprocessing
-import select
 from typing import Dict
 
 from qactuar import ASGIApp, Config
@@ -19,8 +18,7 @@ class PreForkServer(BaseQactuarServer):
         self.queues: Dict[int, multiprocessing.Queue] = {}
         self.current_process = 0
 
-    def serve_forever(self) -> None:
-        self.start_up()
+    async def serve_forever(self) -> None:
         for i in range(self.config.PROCESS_POOL_SIZE or 1):
             self.queues[i] = multiprocessing.Queue()
             self.processes[i] = multiprocessing.Process(
@@ -28,19 +26,13 @@ class PreForkServer(BaseQactuarServer):
             )
             self.processes[i].daemon = True
             self.processes[i].start()
-        try:
-            while True:
-                self.select_socket()
-        except KeyboardInterrupt:
-            self.shut_down()
-        except Exception as err:
-            self.exception_log.exception(err)
-            self.shut_down()
+        while True:
+            await self.select_socket()
+            if self.shutting_down:
+                break
 
-    def select_socket(self) -> None:
-        ready_to_read, _, _ = select.select(
-            [self.listen_socket], [], [], self.config.SELECT_SLEEP_TIME
-        )
+    async def select_socket(self) -> None:
+        ready_to_read = await self.loop.run_in_executor(None, self.watch_socket)
         if ready_to_read:
             self.queues[self.current_process].put_nowait(True)
             self.next_process()

@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).parent
 with (PROJECT_ROOT / "qactuar" / "__init__.py").open("r") as fh:
     for line in fh.readlines():
         if line.startswith("__version__ = "):
-            VERSION = line.split("=")[1].strip().replace('"', "")
+            version = line.split("=")[1].strip().replace('"', "")
             break
 
 with (PROJECT_ROOT / "README.md").open("r") as fh:
@@ -24,7 +24,7 @@ with (PROJECT_ROOT / "extra_requirements.txt").open("r") as fh:
 
 setup(
     name="Qactuar",
-    version=VERSION,
+    version=version,
     description="ASGI compliant web server",
     long_description=long_description,
     long_description_content_type="text/markdown",

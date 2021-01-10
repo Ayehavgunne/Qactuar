@@ -131,7 +131,7 @@ def main() -> None:
 
     if len(sys.argv) < 2:
         server = qactuar.make_server()
-        server.serve_forever()
+        server.run()
         sys.exit(0)
 
     args = parser.parse_args()
@@ -144,7 +144,7 @@ def main() -> None:
     module = import_module(module_str)
     app = getattr(module, app_str)
     server = qactuar.make_server(app=app, conf=config)
-    server.serve_forever()
+    server.run()
 
 
 if __name__ == "__main__":

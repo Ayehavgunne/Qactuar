@@ -2,6 +2,7 @@ import asyncio
 import errno
 import multiprocessing
 import os
+import select
 import socket
 import ssl
 import sys
@@ -13,7 +14,7 @@ from typing import Dict, Optional, Tuple
 from qactuar.config import Config, config_init
 from qactuar.handlers import LifespanHandler
 from qactuar.logs import QactuarLogger
-from qactuar.models import ASGIApp, Receive, Scope, Send
+from qactuar.models import ASGIApp
 
 
 class BaseQactuarServer(object):
@@ -34,7 +35,6 @@ class BaseQactuarServer(object):
             multiprocessing.set_start_method("fork")
             self.is_posix = True
         else:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
             self.is_posix = False
 
         self.config: Config = config or config_init()
@@ -74,40 +74,34 @@ class BaseQactuarServer(object):
             app_module = import_module(module_str)
             self.apps[route] = getattr(app_module, app_str)
 
-    def serve_forever(self) -> None:
+    def run(self) -> None:
+        self.start_up()
+        try:
+            self.loop.run_until_complete(self.serve_forever())
+        except KeyboardInterrupt:
+            self.shut_down()
+        except Exception as err:
+            self.exception_log.exception(err)
+            self.shut_down()
+
+    async def serve_forever(self) -> None:
         raise NotImplementedError
 
-    def add_app(self, application: ASGIApp, route: str = "/") -> None:
-        self.apps[route] = application
+    def add_app(self, app: ASGIApp, route: str = "/") -> None:
+        self.apps[route] = app
 
     def start_up(self) -> None:
-        self.send_to_all_apps(
-            self.lifespan_handler.create_scope(),
-            self.lifespan_handler.receive,
-            self.lifespan_handler.send,
-        )
+        self.lifespan_handler.start()
         self.server_log.info(
             f"Qactuar: Serving {self.scheme.upper()} on {self.host}:{self.port}"
         )
 
     def shut_down(self) -> None:
-        self.shutting_down = True
         self.server_log.info("Shutting Down")
-        self.send_to_all_apps(
-            self.lifespan_handler.create_scope(),
-            self.lifespan_handler.receive,
-            self.lifespan_handler.send,
-        )
-        sys.exit(0)
-
-    async def async_shut_down(self) -> None:
         self.shutting_down = True
-        self.server_log.info("Shutting Down")
-        await self.async_send_to_all_apps(
-            self.lifespan_handler.create_scope(),
-            self.lifespan_handler.receive,
-            self.lifespan_handler.send,
-        )
+        self.lifespan_handler.shutdown()
+        pending = asyncio.all_tasks(self.loop)
+        self.loop.run_until_complete(asyncio.gather(*pending))
         sys.exit(0)
 
     def setup_ssl(self) -> None:
@@ -121,27 +115,7 @@ class BaseQactuarServer(object):
             self.listen_socket, server_side=True, do_handshake_on_connect=False
         )
 
-    def send_to_all_apps(self, scope: Scope, receive: Receive, send: Send) -> None:
-        for app in self.apps.values():
-            self.loop.run_until_complete(app(scope, receive, send))
-
-    async def async_send_to_all_apps(
-        self, scope: Scope, receive: Receive, send: Send
-    ) -> None:
-        for app in self.apps.values():
-            await app(scope, receive, send)
-
-    def accept_client_connection(self) -> Optional[socket.socket]:
-        try:
-            client_socket, self.client_info = self.listen_socket.accept()
-        except IOError as err:
-            if err.args[0] != errno.EINTR:
-                raise
-            return None
-        else:
-            return client_socket
-
-    async def async_accept_client_connection(self) -> Optional[socket.socket]:
+    async def accept_client_connection(self) -> Optional[socket.socket]:
         try:
             client_socket, self.client_info = await self.loop.sock_accept(
                 self.listen_socket
@@ -152,3 +126,12 @@ class BaseQactuarServer(object):
             return None
         else:
             return client_socket
+
+    def watch_socket(self) -> bool:
+        try:
+            ready_to_read, _, _ = select.select(
+                [self.listen_socket], [], [], self.config.SELECT_SLEEP_TIME
+            )
+            return len(ready_to_read) > 0
+        except KeyboardInterrupt:
+            return False

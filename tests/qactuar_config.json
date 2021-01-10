@@ -1,8 +1,6 @@
 {
-  "SERVER_TYPE": "prefork",
+  "SERVER_TYPE": "async_only",
   "APPS": {
-    "/tonberry": "tests.tonberry_app:app",
-    "/tornado": "tests.tornado_app:app",
-    "/basic": "tests.basic_asgi_app:app"
+    "/quart": "tests.quart_app:app"
   }
 }

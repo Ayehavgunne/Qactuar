@@ -1,3 +1,4 @@
+import asyncio
 from base64 import standard_b64encode
 from enum import Enum, auto
 from hashlib import sha1
@@ -92,22 +93,6 @@ class WebSocketState(Enum):
     DISCONNECTED = auto()
 
 
-# class WebSocketHandler(Handler):
-#     def ws_shake_hand(self) -> None:
-#         websocket_key = self.request.headers["sec-websocket-key"]
-#         if websocket_key:
-#             websocket_accept = standard_b64encode(
-#                 sha1(websocket_key.encode("utf-8") + MAGIC_STRING).digest()
-#             )
-#             self.response.status = b"101 Switching Protocols"
-#             self.response.add_header("Upgrade", "websocket")
-#             self.response.add_header("Connection", "Upgrade")
-#             self.response.add_header("Sec-WebSocket-Accept", websocket_accept)
-#
-#     def send(self, data: Message) -> None:
-#         pass
-
-
 class WebSocketHandler(Handler):
     def __init__(self, server: "BaseQactuarServer"):
         super().__init__(server)
@@ -116,6 +101,7 @@ class WebSocketHandler(Handler):
 
     def create_scope(self) -> Scope:
         scope = super().create_scope()
+        scope["type"] = "websocket"
         scope["subprotocols"] = []
         return scope
 
@@ -182,24 +168,43 @@ class WebSocketHandler(Handler):
 
 
 class LifespanHandler(Handler):
-    def create_scope(self) -> Scope:
-        return {"type": "lifespan", "asgi": ASGI_VERSION}
+    def __init__(self, server: "BaseQactuarServer"):
+        super().__init__(server)
+        self.shutdown_event = asyncio.Event()
+        self.shutting_down = False
+        self.scope = {"type": "lifespan", "asgi": ASGI_VERSION}
+
+    def start(self) -> None:
+        self.server.loop.create_task(self._start())
+
+    async def _start(self) -> None:
+        for app in self.server.apps.values():
+            await app(self.scope, self.receive, self.send)
+
+    def shutdown(self) -> None:
+        self.shutting_down = True
+        self.shutdown_event.set()
+        # for app in self.server.apps.values():
+        #     await app(self.scope, self.receive, self.send)
 
     async def receive(self) -> Message:
         return {
             "type": "lifespan.startup"
-            if not self.server.shutting_down
+            if not self.shutting_down
             else "lifespan.shutdown",
             "asgi": ASGI_VERSION,
         }
 
     async def send(self, data: Message) -> None:
+        data_type = data["type"]
         if (
-            data["type"] == "lifespan.startup.failed"
-            or data["type"] == "lifespan.shutdown.failed"
+            data_type == "lifespan.startup.failed"
+            or data_type == "lifespan.shutdown.failed"
         ):
-            if "startup" in data["type"]:
+            if "startup" in data_type:
                 self.server.server_log.error("App startup failed")
-            if "shutdown" in data["type"]:
+            if "shutdown" in data_type:
                 self.server.server_log.error("App shutdown failed")
             self.server.server_log.error(data["message"])
+        if data_type == "lifespan.startup.complete":
+            await self.shutdown_event.wait()

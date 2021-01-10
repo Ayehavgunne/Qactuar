@@ -1,7 +1,9 @@
 import multiprocessing
-import select
+
+# import select
 import socket
 from time import time
+from typing import Optional
 
 from qactuar import ASGIApp, Config
 from qactuar.processes.simple_fork import make_child
@@ -19,26 +21,19 @@ class SimpleForkServer(BaseQactuarServer):
         super().__init__(host, port, app, config)
         self.time_last_cleaned_processes: float = time()
 
-    def serve_forever(self) -> None:
-        self.start_up()
-        try:
-            while True:
-                self.select_socket()
-                self.check_processes()
-        except KeyboardInterrupt:
-            self.shut_down()
-        except Exception as err:
-            self.exception_log.exception(err)
-            self.shut_down()
+    async def serve_forever(self) -> None:
+        while True:
+            client_socket = await self.select_socket()
+            if client_socket:
+                self.fork(client_socket)
+            self.check_processes()
+            if self.shutting_down:
+                break
 
-    def select_socket(self) -> None:
-        ready_to_read, _, _ = select.select(
-            [self.listen_socket], [], [], self.config.SELECT_SLEEP_TIME
-        )
+    async def select_socket(self) -> Optional[socket.socket]:
+        ready_to_read = await self.loop.run_in_executor(None, self.watch_socket)
         if ready_to_read:
-            accepted_socket = self.accept_client_connection()
-            if accepted_socket:
-                self.fork(accepted_socket)
+            return await self.accept_client_connection()
 
     def fork(self, client_socket: socket.socket) -> None:
         process = multiprocessing.Process(target=make_child, args=(self, client_socket))
